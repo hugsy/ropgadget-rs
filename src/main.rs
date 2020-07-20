@@ -225,7 +225,6 @@ fn main () -> GenericResult<()>
                 .long("architecture")
                 .about("Target architecture")
                 .takes_value(true)
-                .default_value("x64")
         )
 
         .arg(
@@ -233,7 +232,6 @@ fn main () -> GenericResult<()>
                 .long("os")
                 .about("Target OS")
                 .takes_value(true)
-                .default_value("win")
         )
 
         .arg(
@@ -252,6 +250,8 @@ fn main () -> GenericResult<()>
 
     if parse_binary_file(&mut sess)
     {
+        info!("New {}", sess);
+
         if let Some (sections) = &sess.sections
         {
             info!("Looking for gadgets in {} sections (with {} threads)...'", sections.len(), sess.nb_thread);
@@ -263,7 +263,7 @@ fn main () -> GenericResult<()>
             {
                 if let Some(filename) = sess.output_file
                 {
-                    info!("Dumping gadgets to '{}'...", filename);
+                    info!("Dumping {} gadgets to '{}'...", sess.gadgets.len(), filename);
                     let mut file = fs::File::create(filename)?;
                     for g in &sess.gadgets
                     {
@@ -274,10 +274,16 @@ fn main () -> GenericResult<()>
                 }
                 else
                 {
-                    info!("Dumping gadgets to stdout...");
+                    info!("Dumping {} gadgets to stdout...", sess.gadgets.len());
                     for g in sess.gadgets
                     {
-                        println!("{:#x} | {}", g.addr, g.text);
+                        let addr = match sess.info.is_64b()
+                        {
+                            true  => { format!("0x{:016x}", g.addr) }
+                            false => { format!("0x{:08x}", g.addr) }
+                        };
+
+                        println!("{} | {}", addr.red(), g.text);
                     }
                 }
 

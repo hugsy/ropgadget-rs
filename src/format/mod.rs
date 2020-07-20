@@ -13,6 +13,21 @@ pub enum Format
 }
 
 
+impl std::fmt::Display for Format
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        let val = match self
+        {
+            Format::Pe => { "PE" }
+            Format::Elf => { "ELF" }
+        };
+
+        write!(f, "OS={}", val)
+    }
+}
+
+
 pub trait ExecutableFormat
 {
     type Fmt;

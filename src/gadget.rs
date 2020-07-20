@@ -2,13 +2,13 @@ extern crate capstone;
 
 use std::fmt;
 use std::io::{Cursor, Read};
-use log::{info, debug, trace};
+use log::{debug, trace};
 use capstone::prelude::*;
-
 
 use crate::error::Error;
 use crate::{section::Section, };
 use crate::{common::GenericResult, };
+
 
 // https://github.com/aquynh/capstone/blob/1b5014515d0d671048e2b43ce483d38d85a2bc83/bindings/python/capstone/__init__.py#L216
 const INSN_GRP_JUMP: u8 = 1;
@@ -156,7 +156,7 @@ pub fn find_biggest_gadget_from_position(section: &Section, pos: usize) -> Gener
             },
             None => {
                 let gadget = Gadget::new(last_valid_insns);
-                info!("largest sequence from {:x} is {}B long", pos, gadget.raw.len());
+                debug!("largest sequence from {:x} is {}B long", pos, gadget.raw.len());
                 return Ok(gadget);
             }
         }

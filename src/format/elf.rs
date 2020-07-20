@@ -21,7 +21,6 @@ pub fn prepare_elf_file(session: &mut Session, elf: &Elf ) -> GenericResult<Vec<
 {
     session.info.entry_point_address = elf.entry as u64;
 
-
     if session.info.format.is_none()
     {
         session.info.format = Some(Format::Elf);

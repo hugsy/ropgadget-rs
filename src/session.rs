@@ -17,6 +17,39 @@ pub struct ExecutableDetail
 }
 
 
+impl std::fmt::Display for ExecutableDetail
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        let cpu = match &self.cpu
+        {
+            Some(x) => { x.cpu_type().to_string() }
+            None => { "Unknown".to_string() }
+        };
+
+        let format = match &self.format
+        {
+            Some(x) => { format!("{}", x) }
+            None => { "Unknown".to_string() }
+        };
+
+        write!(f, "Info({}, {}, Entry=0x{:x})", cpu, format, self.entry_point_address)
+    }
+}
+
+impl ExecutableDetail
+{
+    pub fn is_64b(&self) -> bool
+    {
+        match &self.cpu
+        {
+            Some(cpu) => { cpu.ptrsize() == 8 }
+            None => { false }
+        }
+    }
+}
+
+
 struct RpLogger;
 
 impl log::Log for RpLogger
@@ -118,8 +151,6 @@ impl Session
             Some(_x) =>
             {
                 let cnt = matches.occurrences_of("verbosity");
-                println!("setting verbosity to {}", cnt);
-
                 match cnt
                 {
                     4 => { LevelFilter::Trace } // -vvvv
@@ -139,14 +170,8 @@ impl Session
 
         let output_file = match matches.value_of("outfile")
         {
-            Some(x) =>
-            {
-                Some(x.to_string())
-            }
-            None =>
-            {
-                None
-            }
+            Some(x) => { Some(x.to_string()) }
+            None => { None }
         };
 
         //
@@ -165,20 +190,21 @@ impl Session
                     _ => { unimplemented!("unknown {}", x) }
                 }
             }
-            None => { panic!("unknown") }
+            None => { None }
         };
 
         //
         // if the --arch option is given, the user tries to force the format
         //
+        let mut entry_point_address : u64 = 0;
         let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
         {
             Some(x) =>
             {
                 match x
                 {
-                    "x86" => { Some(Box::new(cpu::x86::X86{})) }
-                    "x64" => { Some(Box::new(cpu::x64::X64{})) }
+                    "x86" => { entry_point_address=0x00000000; Some(Box::new(cpu::x86::X86{})) }
+                    "x64" => { entry_point_address=0x0000000140000000; Some(Box::new(cpu::x64::X64{})) }
                     "arm" => { todo!("soon") }
                     "arm64" => { todo!("soon") }
                     _ => { unimplemented!("unknown {}", x) }
@@ -204,7 +230,7 @@ impl Session
                 {
                     format,
                     cpu,
-                    entry_point_address: 0,
+                    entry_point_address: entry_point_address,
                 },
                 sections: None,
                 gadgets: Vec::new(),
@@ -221,8 +247,8 @@ impl std::fmt::Debug for Session
     {
         let cpu = match &self.info.cpu
         {
-            Some(x) => { x.cpu_type() }
-            None => { cpu::CpuType::Unknown }
+            Some(x) => { x.cpu_type().to_string() }
+            None => { "Unknown".to_string() }
         };
 
         f.debug_struct("Session")
@@ -230,5 +256,19 @@ impl std::fmt::Debug for Session
             .field("format", &Some(self.info.format.as_ref()))
             .field("cpu", &Some(cpu))
             .finish()
+    }
+}
+
+
+impl std::fmt::Display for Session
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        write!(
+            f,
+            "Session(file={}, {})",
+            self.filepath,
+            self.info
+        )
     }
 }
