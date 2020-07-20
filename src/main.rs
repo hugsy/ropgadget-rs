@@ -142,7 +142,6 @@ fn collect_executable_section(session: &mut Session) -> bool
 
         Object::Mach(mach) =>
         {
-            session.info.entry_point_address = 0;
             Some(mach::collect_executable_sections(&input, &mach).unwrap())
         }
 
@@ -173,6 +172,10 @@ fn parse_binary_file(session: &mut Session) -> bool
     {
         return false;
     }
+
+    //
+    // todo: collect more info
+    //
 
     true
 }
@@ -213,7 +216,8 @@ fn main () -> GenericResult<()>
             Arg::with_name("unique")
                 .short('u')
                 .long("unique")
-                .about("Unique only")
+                .about("Show unique gadget only")
+                .takes_value(false)
         )
 
         .arg(

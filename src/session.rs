@@ -68,10 +68,11 @@ pub struct Session
     pub info: ExecutableDetail,
 
     //
-    // the info need to build & store the ropgadgets
+    // the info need to build, store and show the ropgadgets
     //
     pub sections: Option<Vec<Section>>,
     pub gadgets: Vec<Gadget>,
+    pub unique_only: bool,
 }
 
 
@@ -187,6 +188,9 @@ impl Session
         };
 
 
+        let unique_only = matches.is_present("unique");
+
+
         Some(
             Session
             {
@@ -204,6 +208,7 @@ impl Session
                 },
                 sections: None,
                 gadgets: Vec::new(),
+                unique_only,
             }
         )
     }

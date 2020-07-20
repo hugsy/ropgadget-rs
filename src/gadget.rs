@@ -201,12 +201,16 @@ fn cs_disassemble(code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
 
             let detail: InsnDetail = cs.insn_detail(&cs_insn).unwrap();
             // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
-            //trace!("{}", detail
-            //       .groups()
-            //       .map(|x| cs.group_name(x.into()).unwrap())
-            //       .collect::<Vec<String>>()
-            //       .join(",")
-            //);
+            trace!("insn '{} {}', detail={}",
+                  cs_insn.mnemonic().unwrap_or("").to_string(),
+                  cs_insn.op_str().unwrap_or("").to_string(),
+                  detail
+                      .groups()
+                      .map(|x| cs.group_name(x.into()).unwrap())
+                      .collect::<Vec<String>>()
+                      .join(",")
+            );
+
 
             for insn_group in detail.groups()
             {

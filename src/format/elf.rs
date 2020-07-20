@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, BufReader};
-use goblin::elf::{Elf, self};
-use log::{debug};
+use goblin::elf::Elf;
+use log::{debug, trace};
 use colored::*;
 
 use crate::{
@@ -67,7 +67,7 @@ pub fn collect_executable_sections(path: &str, elf: &Elf) -> GenericResult<Vec<S
 
     for s in &elf.section_headers
     {
-        // debug!("{:?}", s);
+        trace!("{:?}", s);
 
         //
         // disregard non executable section
