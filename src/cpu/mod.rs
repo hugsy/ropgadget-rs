@@ -10,7 +10,7 @@ pub enum CpuType
 }
 
 
-pub trait Cpu
+pub trait Cpu : Send + Sync
 {
     fn cpu_type(&self) -> CpuType;
     fn name(&self) -> &str;

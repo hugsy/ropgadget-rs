@@ -12,7 +12,7 @@ use crate::section::Section;
 pub struct ExecutableDetail
 {
     pub format: Option<Format>,
-    pub cpu: Option<Box<dyn cpu::Cpu>>,
+    pub cpu: Option<Box<dyn cpu::Cpu + Send + Sync>>,
     pub entry_point_address: u64,
 }
 
@@ -196,7 +196,7 @@ impl Session
         //
         // if the --arch option is given, the user tries to force the format
         //
-        let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
+        let cpu: Option<Box<dyn cpu::Cpu + std::marker::Send + std::marker::Sync>> = match matches.value_of("arch")
         {
             Some(x) =>
             {

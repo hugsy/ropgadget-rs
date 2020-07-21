@@ -2,12 +2,15 @@ extern crate capstone;
 
 use std::fmt;
 use std::io::{Cursor, Read};
+use std::sync::Arc;
+
 use log::{debug, trace};
 use capstone::prelude::*;
 
 use crate::error::Error;
 use crate::{section::Section, };
 use crate::{common::GenericResult, };
+use crate::cpu;
 
 
 // https://github.com/aquynh/capstone/blob/1b5014515d0d671048e2b43ce483d38d85a2bc83/bindings/python/capstone/__init__.py#L216
@@ -90,13 +93,13 @@ impl Gadget
 }
 
 
-pub fn get_all_return_positions(section: &Section) -> GenericResult<Vec<usize>>
+pub fn get_all_return_positions(cpu: Arc<dyn cpu::Cpu>, section: &Section) -> GenericResult<Vec<usize>>
 {
     let data = &section.data;
     let res: Vec<usize> = data
         .iter()
         .enumerate()
-        .filter(|x| *(x.1) == 0xc3)
+        .filter(|x| (x.1) == cpu.ret_insn().get(0).unwrap())
         .map(|x| x.0 )
         .collect();
 
@@ -107,7 +110,7 @@ pub fn get_all_return_positions(section: &Section) -> GenericResult<Vec<usize>>
 ///
 /// from the c3 at section.data[pos], disassemble previous insn
 ///
-pub fn find_biggest_gadget_from_position(section: &Section, pos: usize) -> GenericResult<Gadget>
+pub fn find_biggest_gadget_from_position(engine: &DisassemblyEngine, section: &Section, pos: usize) -> GenericResult<Gadget>
 {
     let mut cur = Cursor::new(&section.data);
 
@@ -140,7 +143,7 @@ pub fn find_biggest_gadget_from_position(section: &Section, pos: usize) -> Gener
         }
 
         let addr = section.start_address + cur.position();
-        let insns = disassemble(&candidate, addr);
+        let insns = engine.disassembler.disassemble(&candidate, addr);
         match insns
         {
             Some(x) =>
@@ -168,95 +171,149 @@ pub fn find_biggest_gadget_from_position(section: &Section, pos: usize) -> Gener
 }
 
 
-fn disassemble(code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
+
+
+
+
+
+pub enum DisassemblyEngineType
 {
-    //
-    // placeholders for future disassemblers, for now just capstone
-    //
-    cs_disassemble(code, address)
+    Capstone,
 }
 
 
-fn cs_disassemble(code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
+pub trait Disassembler
 {
-    let cs = Capstone::new()
-        .x86()
-        .mode(arch::x86::ArchMode::Mode64)
-        .syntax(arch::x86::ArchSyntax::Intel)
-        .detail(true)
-        .build()
-        .expect("Failed to create Capstone object");
+    fn disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>;
+}
 
 
-    let cs_insns = cs.disasm_all(&code, address)
-        .expect("Failed to disassemble");
+pub struct DisassemblyEngine
+{
+    pub engine_type: DisassemblyEngineType,
+    pub name: String,
+    pub disassembler: Box<dyn Disassembler>,
+}
 
-    if cs_insns.len() > 0
+
+impl DisassemblyEngine
+{
+    pub fn new(engine_type: DisassemblyEngineType ) -> Self
     {
-        let mut insns : Vec<Instruction> = Vec::new();
-
-        for cs_insn in cs_insns.iter()
+        match engine_type
         {
-            let mut should_skip = false;
-
-            let detail: InsnDetail = cs.insn_detail(&cs_insn).unwrap();
-            // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
-            trace!("insn '{} {}', detail={}",
-                  cs_insn.mnemonic().unwrap_or("").to_string(),
-                  cs_insn.op_str().unwrap_or("").to_string(),
-                  detail
-                      .groups()
-                      .map(|x| cs.group_name(x.into()).unwrap())
-                      .collect::<Vec<String>>()
-                      .join(",")
-            );
-
-
-            for insn_group in detail.groups()
+            DisassemblyEngineType::Capstone =>
             {
-                match insn_group.0
+                Self
                 {
-                    INSN_GRP_JUMP => { should_skip = true }
-                    INSN_GRP_CALL => { should_skip = true }
-                    INSN_GRP_PRIV => { should_skip = true }
-                    INSN_GRP_INT => { should_skip = true }
-                    INSN_GRP_IRET => { should_skip = true }
-                    INSN_GRP_RET => { should_skip = insns.len() > 0 }
-                    _ => {should_skip = false;}
+                    engine_type: DisassemblyEngineType::Capstone,
+                    disassembler: Box::new(CapstoneDisassembler{}),
+                    name: "Capstone-Engine".to_string(),
                 }
             }
+        }
+    }
+}
 
-            if should_skip
+
+pub struct CapstoneDisassembler {}
+
+
+impl Disassembler for CapstoneDisassembler
+{
+    fn disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
+    {
+        //
+        // placeholders for future disassemblers, for now just capstone
+        //
+        self.cs_disassemble(code, address)
+    }
+}
+
+
+impl CapstoneDisassembler
+{
+    fn cs_disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
+    {
+        let cs = Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode64)
+            .syntax(arch::x86::ArchSyntax::Intel)
+            .detail(true)
+            .build()
+            .expect("Failed to create Capstone object");
+
+
+        let cs_insns = cs.disasm_all(&code, address)
+            .expect("Failed to disassemble");
+
+        if cs_insns.len() > 0
+        {
+            let mut insns : Vec<Instruction> = Vec::new();
+
+            for cs_insn in cs_insns.iter()
             {
-                break;
+                let mut should_skip = false;
+
+                let detail: InsnDetail = cs.insn_detail(&cs_insn).unwrap();
+                // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
+                trace!("insn '{} {}', detail={}",
+                      cs_insn.mnemonic().unwrap_or("").to_string(),
+                      cs_insn.op_str().unwrap_or("").to_string(),
+                      detail
+                          .groups()
+                          .map(|x| cs.group_name(x.into()).unwrap())
+                          .collect::<Vec<String>>()
+                          .join(",")
+                );
+
+
+                for insn_group in detail.groups()
+                {
+                    match insn_group.0
+                    {
+                        INSN_GRP_JUMP => { should_skip = true }
+                        INSN_GRP_CALL => { should_skip = true }
+                        INSN_GRP_PRIV => { should_skip = true }
+                        INSN_GRP_INT => { should_skip = true }
+                        INSN_GRP_IRET => { should_skip = true }
+                        INSN_GRP_RET => { should_skip = insns.len() > 0 }
+                        _ => {should_skip = false;}
+                    }
+                }
+
+                if should_skip
+                {
+                    break;
+                }
+
+
+                let mut text = cs_insn.mnemonic().unwrap().to_string();
+
+                if let Some(ops) = cs_insn.op_str()
+                {
+                    if ops.len() > 0
+                    {
+                        text += " ";
+                        text += &ops.to_string();
+                    }
+                }
+
+
+                insns.push(
+                    Instruction
+                    {
+                        raw: cs_insn.bytes().to_vec(),
+                        size: cs_insn.bytes().len(),
+                        text: text,
+                        addr: cs_insn.address(),
+                    }
+                );
             }
 
-
-            let mut text = cs_insn.mnemonic().unwrap().to_string();
-
-            if let Some(ops) = cs_insn.op_str()
-            {
-                if ops.len() > 0
-                {
-                    text += " ";
-                    text += &ops.to_string();
-                }
-            }
-
-
-            insns.push(
-                Instruction
-                {
-                    raw: cs_insn.bytes().to_vec(),
-                    size: cs_insn.bytes().len(),
-                    text: text,
-                    addr: cs_insn.address(),
-                }
-            );
+            return Some(insns);
         }
 
-        return Some(insns);
+        None
     }
-
-    None
 }

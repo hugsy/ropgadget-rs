@@ -1,15 +1,16 @@
 #[macro_use]
 extern crate bitflags;
 
-use clap::{App, Arg};
-use colored::*;
-use goblin::Object;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
 use std::thread;
-use log::{info, warn, error, debug, trace};
+use std::sync::Arc;
 
+use clap::{App, Arg};
+use colored::*;
+use goblin::Object;
+use log::{info, warn, error, debug, trace};
 
 mod common;
 mod error;
@@ -27,15 +28,15 @@ use session::Session;
 
 
 
-fn process_section(section: &section::Section) -> GenericResult<Vec<Gadget>>
+fn process_section(engine: &gadget::DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
 {
     let mut gadgets: Vec<Gadget> = Vec::new();
 
-    for pos in get_all_return_positions(section)?
+    for pos in get_all_return_positions(cpu, section)?
     {
         trace!("in {} return_insn at pos={:#x} (va={:#x})", section.name, pos, section.start_address+pos as u64);
 
-        let res = find_biggest_gadget_from_position(section, pos);
+        let res = find_biggest_gadget_from_position(engine, section, pos);
         if res.is_err()
         {
             continue;
@@ -50,10 +51,12 @@ fn process_section(section: &section::Section) -> GenericResult<Vec<Gadget>>
 }
 
 
-fn thread_worker(s: &section::Section) -> Vec<Gadget>
+fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> Vec<Gadget>
 {
-    let gadgets = process_section(s).unwrap();
-    debug!("in {} - {} gadget(s) found", s.name.green().bold(), gadgets.len());
+    let engine = gadget::DisassemblyEngine::new(gadget::DisassemblyEngineType::Capstone);
+    debug!("using engine: {}", &engine.name);
+    let gadgets = process_section(&engine, section, cpu).unwrap();
+    debug!("in {} - {} gadget(s) found", section.name.green().bold(), gadgets.len());
     gadgets
 }
 
@@ -69,11 +72,18 @@ fn find_gadgets(session: &mut Session) -> bool
     {
         let nb_thread = session.nb_thread;
 
+
         //
-        // multithread parsing of the sections
+        // multithread parsing of the sections (1 thread/section)
         //
 
         let mut i : usize = 0;
+
+        let cpu: Arc<dyn cpu::Cpu> = match session.info.cpu.as_ref().unwrap().cpu_type()
+        {
+            cpu::CpuType::X86 => {Arc::new(cpu::x86::X86{})}
+            cpu::CpuType::X64 => {Arc::new(cpu::x64::X64{})}
+        };
 
         while i < sections.len()
         {
@@ -85,8 +95,9 @@ fn find_gadgets(session: &mut Session) -> bool
                 {
                     let b= thread::Builder::new()
                         .name(std::fmt::format( std::format_args!("thread-{}", n)));
+                    let c = cpu.clone();
                     let s = section.clone(); // <-- HACK: this is ugly af and inefficient, learn to do better
-                    let thread = b.spawn(move || thread_worker(&s));
+                    let thread = b.spawn(move || thread_worker(&s, c));
                     debug!("spawning thread 'thread-{}'...", n);
                     threads.push(thread.unwrap());
                     i += 1;
