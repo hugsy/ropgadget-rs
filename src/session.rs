@@ -168,7 +168,7 @@ impl Session
             .unwrap();
 
 
-        let output_file = match matches.value_of("outfile")
+        let output_file = match matches.value_of("output_file")
         {
             Some(x) => { Some(x.to_string()) }
             None => { None }
@@ -196,21 +196,52 @@ impl Session
         //
         // if the --arch option is given, the user tries to force the format
         //
-        let mut entry_point_address : u64 = 0;
         let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
         {
             Some(x) =>
             {
                 match x
                 {
-                    "x86" => { entry_point_address=0x00000000; Some(Box::new(cpu::x86::X86{})) }
-                    "x64" => { entry_point_address=0x0000000140000000; Some(Box::new(cpu::x64::X64{})) }
+                    "x86" => { Some(Box::new(cpu::x86::X86{})) }
+                    "x64" => { Some(Box::new(cpu::x64::X64{})) }
                     "arm" => { todo!("soon") }
                     "arm64" => { todo!("soon") }
                     _ => { unimplemented!("unknown {}", x) }
                 }
             }
             None => { None }
+        };
+
+
+
+        let entry_point_address : u64 = match matches.value_of("image_base")
+        {
+            Some(x) =>
+            {
+                //
+                // if specified by flag --imagebase
+                //
+                x.parse::<u64>().unwrap_or(0)
+            }
+            None =>
+            {
+                //
+                // default value
+                //
+                match &cpu
+                {
+                    Some(x) =>
+                    {
+                        match x.ptrsize()
+                        {
+                            4 => { 0x00000000 }
+                            8 => { 0x0000000140000000 }
+                            _ => { 0x00000000 }
+                        }
+                    }
+                    None => { 0x00000000 }
+                }
+            }
         };
 
 

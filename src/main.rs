@@ -50,11 +50,18 @@ fn process_section(section: &section::Section) -> GenericResult<Vec<Gadget>>
 }
 
 
+fn thread_worker(s: &section::Section) -> Vec<Gadget>
+{
+    let gadgets = process_section(s).unwrap();
+    debug!("in {} - {} gadget(s) found", s.name.green().bold(), gadgets.len());
+    gadgets
+}
+
 
 //
-// returns the number of gadget found
+// returns true if no error occured
 //
-fn find_gadgets(session: &mut Session) -> usize
+fn find_gadgets(session: &mut Session) -> bool
 {
     let mut total_gadgets : usize = 0;
 
@@ -74,18 +81,12 @@ fn find_gadgets(session: &mut Session) -> usize
 
             for n in 0..nb_thread
             {
-                if let Some(section ) = sections.get(i)
+                if let Some(section) = sections.get(i)
                 {
                     let b= thread::Builder::new()
                         .name(std::fmt::format( std::format_args!("thread-{}", n)));
                     let s = section.clone(); // <-- HACK: this is ugly af and inefficient, learn to do better
-                    let thread = b.spawn(move ||
-                        {
-                            let gadgets = process_section(&s).unwrap();
-                            debug!("in {} - {} gadget(s) found", s.name.green().bold(), gadgets.len());
-                            gadgets
-                        });
-
+                    let thread = b.spawn(move || thread_worker(&s));
                     debug!("spawning thread 'thread-{}'...", n);
                     threads.push(thread.unwrap());
                     i += 1;
@@ -115,7 +116,7 @@ fn find_gadgets(session: &mut Session) -> usize
         debug!("total gadgets found => {}", total_gadgets);
     }
 
-    total_gadgets
+    true
 }
 
 
@@ -205,7 +206,7 @@ fn main () -> GenericResult<()>
         )
 
         .arg(
-            Arg::with_name("outfile")
+            Arg::with_name("output_file")
                 .short('o')
                 .long("output-file")
                 .about("Write all gadgets into file")
@@ -235,6 +236,13 @@ fn main () -> GenericResult<()>
         )
 
         .arg(
+            Arg::with_name("image_base")
+                .long("imagebase")
+                .about("Use VALUE as image base")
+                .takes_value(true)
+        )
+
+        .arg(
             Arg::with_name("verbosity")
                 .short('v')
                 .about("Increase verbosity (repeatable from 1 to 4)")
@@ -255,40 +263,41 @@ fn main () -> GenericResult<()>
         if let Some (sections) = &sess.sections
         {
             info!("Looking for gadgets in {} sections (with {} threads)...'", sections.len(), sess.nb_thread);
-            if find_gadgets(&mut sess) == 0
+            if !find_gadgets(&mut sess)
             {
-                warn!("no gadget found");
+                error!("An error occured in `find_gadgets'");
+                return Ok(());
+            }
+
+
+            let gadgets = &sess.gadgets;
+
+            if let Some(filename) = sess.output_file
+            {
+                info!("Dumping {} gadgets to '{}'...", gadgets.len(), filename);
+                let mut file = fs::File::create(filename)?;
+                for g in gadgets
+                {
+                    let txt = g.text.as_str();
+                    let addr = sess.info.entry_point_address + g.addr;
+                    file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
+                }
             }
             else
             {
-                if let Some(filename) = sess.output_file
+                info!("Dumping {} gadgets to stdout...", gadgets.len());
+                for g in gadgets
                 {
-                    info!("Dumping {} gadgets to '{}'...", sess.gadgets.len(), filename);
-                    let mut file = fs::File::create(filename)?;
-                    for g in &sess.gadgets
+                    let addr = match sess.info.is_64b()
                     {
-                        let txt = g.text.as_str();
-                        let addr = sess.info.entry_point_address + g.addr;
-                        file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
-                    }
+                        true  => { format!("0x{:016x}", g.addr) }
+                        _ => { format!("0x{:08x}", g.addr) }
+                    };
+                    println!("{} | {}", addr.red(), g.text);
                 }
-                else
-                {
-                    info!("Dumping {} gadgets to stdout...", sess.gadgets.len());
-                    for g in sess.gadgets
-                    {
-                        let addr = match sess.info.is_64b()
-                        {
-                            true  => { format!("0x{:016x}", g.addr) }
-                            false => { format!("0x{:08x}", g.addr) }
-                        };
-
-                        println!("{} | {}", addr.red(), g.text);
-                    }
-                }
-
-                info!("Done!");
             }
+
+            info!("Done!");
         }
     }
     else
@@ -298,10 +307,11 @@ fn main () -> GenericResult<()>
 
     sess.end_timestamp = std::time::Instant::now();
 
-    if log::log_enabled!( log::Level::Debug )
+    if log::log_enabled!( log::Level::Info )
     {
-        let execution_time = sess.end_timestamp - sess.start_timestamp;
-        debug!("total execution time => {:?}", execution_time);
+        //let execution_time = sess.start_timestamp.elapsed().as_secs_f64();
+        //info!("Execution time => {:?}", execution_time);
+        info!("Execution: {} gadgets found in {:?}", sess.gadgets.len(), sess.end_timestamp - sess.start_timestamp);
     }
 
     Ok(())

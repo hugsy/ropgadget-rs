@@ -6,7 +6,7 @@ pub enum CpuType
 {
     X86,
     X64,
-    // todo: X64, ARM, ARM64
+    // todo: ARM, ARM64
 }
 
 

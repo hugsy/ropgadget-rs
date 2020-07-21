@@ -11,12 +11,12 @@ use crate::{common::GenericResult, };
 
 
 // https://github.com/aquynh/capstone/blob/1b5014515d0d671048e2b43ce483d38d85a2bc83/bindings/python/capstone/__init__.py#L216
-const INSN_GRP_JUMP: u8 = 1;
-const INSN_GRP_CALL: u8 = 2;
-const INSN_GRP_RET:  u8 = 3;
-const INSN_GRP_INT:  u8 = 4;
-const INSN_GRP_IRET: u8 = 5;
-const INSN_GRP_PRIV: u8 = 6;
+const INSN_GRP_JUMP: u8 = 0x01;
+const INSN_GRP_CALL: u8 = 0x02;
+const INSN_GRP_RET:  u8 = 0x03;
+const INSN_GRP_INT:  u8 = 0x04;
+const INSN_GRP_IRET: u8 = 0x05;
+const INSN_GRP_PRIV: u8 = 0x06;
 
 
 #[derive(Debug)]
