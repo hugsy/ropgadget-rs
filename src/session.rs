@@ -104,8 +104,10 @@ pub struct Session
     // the info need to build, store and show the ropgadgets
     //
     pub sections: Option<Vec<Section>>,
+    pub max_gadget_length: usize,
     pub gadgets: Vec<Gadget>,
     pub unique_only: bool,
+    pub use_color: bool,
 }
 
 
@@ -247,6 +249,14 @@ impl Session
 
         let unique_only = matches.is_present("unique");
 
+        let use_color = !matches.is_present("no_color");
+
+        let max_gadget_length = match matches.value_of("max_gadget_length")
+        {
+            Some(x) => { x.parse::<usize>() }
+            None => { 10 }
+        };
+
 
         Some(
             Session
@@ -266,6 +276,8 @@ impl Session
                 sections: None,
                 gadgets: Vec::new(),
                 unique_only,
+                use_color,
+                max_gadget_length,
             }
         )
     }

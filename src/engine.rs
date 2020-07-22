@@ -161,92 +161,97 @@ impl CapstoneDisassembler
         let cs_insns = self.cs.disasm_all(&code, address)
             .expect("Failed to disassemble");
 
-        if cs_insns.len() > 0
+        //
+        // Any instruction?
+        //
+        if cs_insns.len() == 0
         {
-            let mut insns : Vec<Instruction> = Vec::new();
-            let mut candidates : Vec<Instruction> = Vec::new();
-
-            for cs_insn in cs_insns.iter()
-            {
-                let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
-
-                // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
-                trace!(
-                    "insn '{} {}', detail={}",
-                    cs_insn.mnemonic().unwrap_or("").to_string(),
-                    cs_insn.op_str().unwrap_or("").to_string(),
-                    detail
-                    .groups()
-                    .map(|x| self.cs.group_name(x.into()).unwrap())
-                    .collect::<Vec<String>>()
-                    .join(",")
-                );
-
-
-                let mut insn_group = InstructionGroup::Invalid;
-
-                for cs_insn_group in detail.groups()
-                {
-                    insn_group = match cs_insn_group.0
-                    {
-                        INSN_GRP_JUMP => { InstructionGroup::Jump }
-                        INSN_GRP_CALL => { InstructionGroup::Call }
-                        INSN_GRP_PRIV => { InstructionGroup::Privileged }
-                        INSN_GRP_INT => { InstructionGroup::Int }
-                        INSN_GRP_IRET => { InstructionGroup::Iret }
-                        INSN_GRP_RET => { InstructionGroup::Ret }
-                        _ => {continue;}
-                    };
-                }
-
-                let mnemonic = cs_insn.mnemonic().unwrap().to_string();
-
-                let operands : Option<String> = match cs_insn.op_str()
-                {
-                    // todo: do better parsing on args
-                    Some(op) => { Some(op.to_string()) }
-                    None => { None }
-                };
-
-                //println!("insn={:?}", cs_insn);
-                let insn = Instruction
-                {
-                    raw: cs_insn.bytes().to_vec(),
-                    size: cs_insn.bytes().len(),
-                    mnemonic: mnemonic,
-                    operands: operands,
-                    address: cs_insn.address(),
-                    group: insn_group,
-                };
-
-                candidates.push(insn);
-            }
-
-
-            //
-            // at this point `candidates` holds a valid set of Instruction
-            // must filter out the sequence that can't qualify for a rop sequence
-            //
-            for insn in candidates.into_iter().rev()
-            {
-                match insn.group
-                {
-                    InstructionGroup::Jump  => { if insns.len() > 0 { break; } }
-                    InstructionGroup::Call  => { if insns.len() > 0 { break; } }
-                    InstructionGroup::Ret  => { if insns.len() > 0 { break; } }
-                    InstructionGroup::Privileged  => { break; }
-                    InstructionGroup::Int  => { break; }
-                    InstructionGroup::Iret  => { break; }
-                    _ => {}
-                };
-
-                insns.insert(0, insn);
-            }
-
-
-            return Some(insns);
+            return None;
         }
 
-        None
+        //
+        // Otherwise we're good to proceed
+        //
+        let mut insns : Vec<Instruction> = Vec::new();
+        let mut candidates : Vec<Instruction> = Vec::new();
+
+        for cs_insn in cs_insns.iter()
+        {
+            let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
+
+            // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
+            trace!(
+                "insn '{} {}', detail={}",
+                cs_insn.mnemonic().unwrap_or("").to_string(),
+                cs_insn.op_str().unwrap_or("").to_string(),
+                detail
+                .groups()
+                .map(|x| self.cs.group_name(x.into()).unwrap())
+                .collect::<Vec<String>>()
+                .join(",")
+            );
+
+
+            let mut insn_group = InstructionGroup::Undefined;
+
+            for cs_insn_group in detail.groups()
+            {
+                insn_group = match cs_insn_group.0
+                {
+                    INSN_GRP_JUMP => { InstructionGroup::Jump }
+                    INSN_GRP_CALL => { InstructionGroup::Call }
+                    INSN_GRP_PRIV => { InstructionGroup::Privileged }
+                    INSN_GRP_INT => { InstructionGroup::Int }
+                    INSN_GRP_IRET => { InstructionGroup::Iret }
+                    INSN_GRP_RET => { InstructionGroup::Ret }
+                    _ => {continue;}
+                };
+            }
+
+            let mnemonic = cs_insn.mnemonic().unwrap().to_string();
+
+            let operands : Option<String> = match cs_insn.op_str()
+            {
+                // todo: do better parsing on args
+                Some(op) => { Some(op.to_string()) }
+                None => { None }
+            };
+
+            //println!("insn={:?}", cs_insn);
+            let insn = Instruction
+            {
+                raw: cs_insn.bytes().to_vec(),
+                size: cs_insn.bytes().len(),
+                mnemonic: mnemonic,
+                operands: operands,
+                address: cs_insn.address(),
+                group: insn_group,
+            };
+
+            candidates.push(insn);
+        }
+
+
+        //
+        // at this point `candidates` holds a valid set of Instruction
+        // must filter out the sequence that can't qualify for a rop sequence
+        //
+        for insn in candidates.into_iter().rev()
+        {
+            match insn.group
+            {
+                InstructionGroup::Jump  => { if insns.len() > 0 { break; } }
+                InstructionGroup::Call  => { if insns.len() > 0 { break; } }
+                InstructionGroup::Ret  => { if insns.len() > 0 { break; } }
+                InstructionGroup::Privileged  => { break; }
+                InstructionGroup::Int  => { break; }
+                InstructionGroup::Iret  => { break; }
+                _ => {}
+            };
+
+            insns.insert(0, insn);
+        }
+
+        Some(insns)
     }
 }

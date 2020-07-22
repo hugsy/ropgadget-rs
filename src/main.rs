@@ -30,23 +30,31 @@ use engine::{DisassemblyEngine, DisassemblyEngineType};
 
 
 
-fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
+fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
 {
     let mut gadgets: Vec<Gadget> = Vec::new();
 
     for pos in get_all_return_positions(&cpu, section)?
     {
-        trace!("in {} return_insn at pos={:#x} (va={:#x})", section.name, pos, section.start_address+pos as u64);
+        trace!("[{}] {:x} data[..{:x}]", section.name, section.start_address, pos);
 
-        let res = find_gadgets_from_position(engine, section, pos, &cpu);
-        if res.is_err()
+        let data = &section.data[(pos-10)..pos+1]; // todo: use session.max_gadget_length
+        let res = find_gadgets_from_position(
+            engine,
+            data,
+            section.start_address,
+            pos,
+            &cpu,
+            use_color
+        );
+
+        if res.is_ok()
         {
-            continue;
+            let mut g = res?;
+            debug!("new {:?}", g);
+            gadgets.append(&mut g);
         }
 
-        let mut g = res?;
-        debug!("new {:?}", g);
-        gadgets.append(&mut g);
         //break;
     }
 
@@ -54,11 +62,11 @@ fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: 
 }
 
 
-fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> Vec<Gadget>
+fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> Vec<Gadget>
 {
     let engine = DisassemblyEngine::new(DisassemblyEngineType::Capstone, cpu.as_ref());
     debug!("using engine: {}", &engine);
-    let gadgets = process_section(&engine, section, cpu).unwrap();
+    let gadgets = process_section(&engine, section, cpu, use_color).unwrap();
     debug!("in {} - {} gadget(s) found", section.name.green().bold(), gadgets.len());
     gadgets
 }
@@ -70,6 +78,7 @@ fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> Vec<Gadg
 fn find_gadgets(session: &mut Session) -> bool
 {
     let mut total_gadgets : usize = 0;
+    let use_color = session.use_color.clone();
 
     if let Some(sections) = &session.sections
     {
@@ -100,7 +109,7 @@ fn find_gadgets(session: &mut Session) -> bool
                         .name(std::fmt::format( std::format_args!("thread-{}", n)));
                     let c = cpu.clone();
                     let s = section.clone(); // <-- HACK: this is ugly af and inefficient, learn to do better
-                    let thread = b.spawn(move || thread_worker(&s, c));
+                    let thread = b.spawn(move || thread_worker(&s, c, use_color));
                     debug!("spawning thread 'thread-{}'...", n);
                     threads.push(thread.unwrap());
                     i += 1;
@@ -257,14 +266,27 @@ fn main () -> GenericResult<()>
         )
 
         .arg(
+            Arg::with_name("no_color")
+                .long("no-color")
+                .about("Don't colorize the output (only applies for stdout)")
+                .takes_value(false)
+        )
+
+        .arg(
             Arg::with_name("verbosity")
                 .short('v')
                 .about("Increase verbosity (repeatable from 1 to 4)")
                 .multiple(true)
                 .takes_value(false)
+        )
 
-        // todo add gadget filtering option
-
+        .arg(
+            Arg::with_name("max_gadget_length")
+                .short('l')
+                .long("max-gadget-len")
+                .about("Maximum size of a gadget")
+                .takes_value(true)
+                .default_value("8")
         );
 
     let mut sess = Session::new(app).unwrap();
@@ -287,7 +309,7 @@ fn main () -> GenericResult<()>
             }
 
 
-            let gadgets = &sess.gadgets;
+            let gadgets = &mut sess.gadgets;
 
             if let Some(filename) = sess.output_file
             {
@@ -303,6 +325,7 @@ fn main () -> GenericResult<()>
             else
             {
                 info!("Dumping {} gadgets to stdout...", gadgets.len());
+                gadgets.sort_by(|a,b | a.address.cmp(&b.address));
                 for g in gadgets
                 {
                     let addr = match sess.info.is_64b()
@@ -310,8 +333,18 @@ fn main () -> GenericResult<()>
                         true  => { format!("0x{:016x}", g.address) }
                         _ => { format!("0x{:08x}", g.address) }
                     };
-                    println!("{} | {} | {:?}", addr.red(), g.text, g.raw);
-                    //println!("{} | {}", addr.red(), g.text);
+
+                    //println!("{} | {} | {:?}", addr, g.text, g.raw);
+
+                    if sess.use_color
+                    {
+                        println!("{} | {}", addr.red(), g.text);
+                    }
+                    else
+                    {
+                        println!("{} | {}", addr, g.text);
+                    }
+
                 }
             }
 

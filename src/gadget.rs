@@ -1,14 +1,14 @@
 extern crate capstone;
 
 use std::fmt;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, SeekFrom, Seek};
 use std::sync::Arc;
 
-use log::{debug, };
+use log::{debug, info, warn};
 use colored::*;
 
-use crate::error::Error;
 use crate::{section::Section, };
+use crate::{session::Session, };
 use crate::{common::GenericResult, };
 use crate::cpu;
 use crate::engine::{DisassemblyEngine, };
@@ -18,7 +18,7 @@ use crate::engine::{DisassemblyEngine, };
 #[derive(Debug, Copy, Clone)]
 pub enum InstructionGroup
 {
-    Invalid,
+    Undefined,
     Jump,
     Call,
     Ret,
@@ -42,15 +42,25 @@ pub struct Instruction
 
 impl Instruction
 {
-    pub fn text(&self) -> String
+    pub fn text(&self, use_color: bool) -> String
     {
+        let mnemo = match use_color
+        {
+            true => {format!("{}", self.mnemonic.cyan())}
+            false => {format!("{}", self.mnemonic)}
+        };
+
         let op = match &self.operands
         {
-            Some(x) => { format!(" {}", x.bold()) }
+            Some(x) =>
+            {
+                if use_color { format!(" {}", x.bold()) }
+                else { format!(" {}", x) }
+            }
             None => { "".to_string() }
         };
 
-        format!("{}{}", self.mnemonic.cyan(), op)
+        format!("{}{}", mnemo, op)
     }
 }
 
@@ -59,7 +69,7 @@ impl fmt::Display for Instruction
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {
-        write!(f, "Instruction(addr=0x{:x}, size={}, text='{}', raw={:?}, group={:?})", self.address, self.size, self.text(), self.raw, self.group)
+        write!(f, "Instruction(addr=0x{:x}, size={}, text='{}', raw={:?}, group={:?})", self.address, self.size, self.text(false), self.raw, self.group)
     }
 }
 
@@ -86,7 +96,7 @@ impl fmt::Display for Gadget
 
 impl Gadget
 {
-    pub fn new(insns: Vec<Instruction>) -> Self
+    pub fn new(insns: Vec<Instruction>, use_color : bool) -> Self
     {
         //
         // by nature, we should never be here if insns.len() is 0 (should at least have the
@@ -102,7 +112,7 @@ impl Gadget
 
         let text = insns
             .iter()
-            .map(|x| x.text().clone() + " ; ")
+            .map(|i| i.text(use_color).clone() + " ; ")
             .collect();
 
         let raw = insns
@@ -135,28 +145,24 @@ pub fn get_all_return_positions(cpu: &Arc<dyn cpu::Cpu>, section: &Section) -> G
 ///
 /// from the c3 at section.data[pos], disassemble previous insn
 ///
-pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Arc<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
+pub fn find_gadgets_from_position(engine: &DisassemblyEngine, data: &[u8], start_address: u64, initial_position: usize, cpu: &Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
 {
-    let mut cur = Cursor::new(&section.data);
+    let mut cur = Cursor::new(data);
 
     //
     // browse the section for the largest gadget
     //
 
     let mut sz: usize = 1;
+    let mut nb_invalid = 0;
     let step = cpu.insn_step();
-    //let mut last_valid_insns: Vec<Instruction> = Vec::new();
+    let mut gadgets : Vec<Gadget> = Vec::new();
+
     let max_invalid_size = match cpu.cpu_type()
     {
         cpu::CpuType::X86 => { 10 }
         cpu::CpuType::X64 => { 10 }
     };
-
-
-
-    let mut nb_invalid = 0;
-
-    let mut gadgets : Vec<Gadget> = Vec::new();
 
     loop
     {
@@ -165,28 +171,32 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
         //
         // prevent underflow
         //
-        if (sz + step) > initial_position
+        if (sz - step) >= data.len() //initial_position
         {
             break;
         }
-
 
         //
         // jump to the position in the file
         //
-        let current_position = (initial_position - (sz-step)) as u64;
-        cur.set_position(current_position as u64);
+        let current_position = -((sz-step) as i64);
+        cur.seek( SeekFrom::End(current_position-1) )?;
         if cur.read_exact(&mut candidate).is_err()
         {
+            warn!("eof");
             break;
         }
 
-
-        let addr = section.start_address + cur.position();
-        let insns = engine.disassemble(&candidate, addr - sz as u64);
+        assert_eq!( *candidate.last().unwrap(), 0xc3);
 
         //
-        // transform the vec<Instruction> into a proper gadget
+        // disassemble the code from given position
+        //
+        let addr = start_address + initial_position as u64 + cur.position() - sz as u64;
+        let insns = engine.disassemble(&candidate, addr as u64);
+
+        //
+        // transform the Vec<Instruction> into a valid gadget
         //
         match insns
         {
@@ -200,9 +210,12 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
                     {
                         InstructionGroup::Ret =>
                         {
-                            let gadget = Gadget::new(x);
-                            debug!("pushing new gadget(pos={:x}, len={}B)", initial_position, gadget.raw.len());
-                            gadgets.push(gadget);
+                            let gadget = Gadget::new(x, use_color);
+                            if gadgets.iter().all( |x| x.address != gadget.address )
+                            {
+                                debug!("pushing new gadget(pos={:x}, sz={}B)", gadget.address, gadget.raw.len());
+                                gadgets.push(gadget);
+                            }
                         }
                         _ => {}
                     }
@@ -222,16 +235,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
         sz += step;
     }
 
-    /*
-    if last_valid_insns.len() > 0
-    {
-        let gadget = Gadget::new(last_valid_insns);
-        debug!("pushing new gadget(pos={:x}, len={}B)", pos, gadget.raw.len());
-    }
-    */
-    return Ok(gadgets);
-
-    //Err( Error::GadgetBuildError() )
+    Ok(gadgets)
 }
 
 
