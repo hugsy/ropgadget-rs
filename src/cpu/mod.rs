@@ -15,7 +15,9 @@ pub trait Cpu : Send + Sync
     fn cpu_type(&self) -> CpuType;
     fn name(&self) -> &str;
     fn ptrsize(&self) -> usize;
-    fn ret_insn(&self) -> Vec<u8>;
+    fn ret_insn(&self) -> Vec<Vec<u8>>;
+    fn branch_insn(&self) -> Vec<Vec<u8>>;
+    fn insn_step(&self) -> usize;
 }
 
 

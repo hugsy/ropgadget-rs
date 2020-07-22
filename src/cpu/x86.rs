@@ -24,8 +24,29 @@ impl cpu::Cpu for X86
     }
 
 
-    fn ret_insn(&self) -> Vec<u8>
+    fn ret_insn(&self) -> Vec<Vec<u8>>
     {
-        vec![0xc3]
+        vec![
+            vec![0xc3, ], // ret
+            vec![0xc2, ], // ret imm
+            vec![0xcb, ], // retf
+            vec![0xcf, ], // retf imm
+        ]
     }
+
+
+    fn branch_insn(&self) -> Vec<Vec<u8>>
+    {
+        vec![
+            vec![0xff, ], // call/jmp
+
+        ]
+    }
+
+
+    fn insn_step(&self) -> usize
+    {
+        1
+    }
+
 }

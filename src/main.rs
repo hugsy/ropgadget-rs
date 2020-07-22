@@ -19,32 +19,35 @@ mod format;
 mod section;
 mod session;
 mod cpu;
+mod engine;
+
 
 use common::GenericResult;
-use gadget::{get_all_return_positions, find_biggest_gadget_from_position, Gadget};
+use gadget::{get_all_return_positions, find_gadgets_from_position, Gadget};
 use format::{pe, elf, mach};
 use session::Session;
+use engine::{DisassemblyEngine, DisassemblyEngineType};
 
 
 
-
-fn process_section(engine: &gadget::DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
+fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
 {
     let mut gadgets: Vec<Gadget> = Vec::new();
 
-    for pos in get_all_return_positions(cpu, section)?
+    for pos in get_all_return_positions(&cpu, section)?
     {
         trace!("in {} return_insn at pos={:#x} (va={:#x})", section.name, pos, section.start_address+pos as u64);
 
-        let res = find_biggest_gadget_from_position(engine, section, pos);
+        let res = find_gadgets_from_position(engine, section, pos, &cpu);
         if res.is_err()
         {
             continue;
         }
 
-        let gadget = res?;
-        debug!("new {}", gadget);
-        gadgets.push(gadget);
+        let mut g = res?;
+        debug!("new {:?}", g);
+        gadgets.append(&mut g);
+        //break;
     }
 
     Ok(gadgets)
@@ -53,8 +56,8 @@ fn process_section(engine: &gadget::DisassemblyEngine, section: &section::Sectio
 
 fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>) -> Vec<Gadget>
 {
-    let engine = gadget::DisassemblyEngine::new(gadget::DisassemblyEngineType::Capstone);
-    debug!("using engine: {}", &engine.name);
+    let engine = DisassemblyEngine::new(DisassemblyEngineType::Capstone, cpu.as_ref());
+    debug!("using engine: {}", &engine);
     let gadgets = process_section(&engine, section, cpu).unwrap();
     debug!("in {} - {} gadget(s) found", section.name.green().bold(), gadgets.len());
     gadgets
@@ -259,6 +262,9 @@ fn main () -> GenericResult<()>
                 .about("Increase verbosity (repeatable from 1 to 4)")
                 .multiple(true)
                 .takes_value(false)
+
+        // todo add gadget filtering option
+
         );
 
     let mut sess = Session::new(app).unwrap();
@@ -290,7 +296,7 @@ fn main () -> GenericResult<()>
                 for g in gadgets
                 {
                     let txt = g.text.as_str();
-                    let addr = sess.info.entry_point_address + g.addr;
+                    let addr = sess.info.entry_point_address + g.address;
                     file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
                 }
             }
@@ -301,10 +307,11 @@ fn main () -> GenericResult<()>
                 {
                     let addr = match sess.info.is_64b()
                     {
-                        true  => { format!("0x{:016x}", g.addr) }
-                        _ => { format!("0x{:08x}", g.addr) }
+                        true  => { format!("0x{:016x}", g.address) }
+                        _ => { format!("0x{:08x}", g.address) }
                     };
-                    println!("{} | {}", addr.red(), g.text);
+                    println!("{} | {} | {:?}", addr.red(), g.text, g.raw);
+                    //println!("{} | {}", addr.red(), g.text);
                 }
             }
 
