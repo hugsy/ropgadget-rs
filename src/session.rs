@@ -253,7 +253,7 @@ impl Session
 
         let max_gadget_length = match matches.value_of("max_gadget_length")
         {
-            Some(x) => { x.parse::<usize>() }
+            Some(x) => { x.parse::<usize>().unwrap() }
             None => { 10 }
         };
 
