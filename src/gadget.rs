@@ -15,7 +15,7 @@ use crate::engine::{DisassemblyEngine, };
 
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum InstructionGroup
 {
     Undefined,
@@ -28,7 +28,7 @@ pub enum InstructionGroup
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Instruction
 {
     pub size: usize,
@@ -74,7 +74,7 @@ impl fmt::Display for Instruction
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Gadget
 {
     pub address: u64,

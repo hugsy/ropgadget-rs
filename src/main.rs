@@ -284,7 +284,7 @@ fn main () -> GenericResult<()>
                 .long("max-gadget-len")
                 .about("Maximum size of a gadget")
                 .takes_value(true)
-                .default_value("8")
+                .default_value("16")
         );
 
     let mut sess = Session::new(app).unwrap();
@@ -309,6 +309,21 @@ fn main () -> GenericResult<()>
 
             let gadgets = &mut sess.gadgets;
 
+            //
+            // if unique, filter out doublons
+            //
+            if sess.unique_only
+            {
+                gadgets.dedup_by(|a, b| a.text.eq_ignore_ascii_case(&b.text));
+            }
+
+
+            //
+            // sort by address
+            //
+            gadgets.sort_by(|a,b | a.address.cmp(&b.address));
+
+
             if let Some(filename) = sess.output_file
             {
                 info!("Dumping {} gadgets to '{}'...", gadgets.len(), filename);
@@ -323,7 +338,7 @@ fn main () -> GenericResult<()>
             else
             {
                 info!("Dumping {} gadgets to stdout...", gadgets.len());
-                gadgets.sort_by(|a,b | a.address.cmp(&b.address));
+
                 for g in gadgets
                 {
                     let addr = match sess.info.is_64b()
