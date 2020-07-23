@@ -12,7 +12,6 @@ You've been warned, don't blame me...
 PS C:\Users\hugsy❯ .\rp-rs.exe --help
 rp-rs 0.1
 hugsy
-
 Another (bad) ROP gadget finder
 
 USAGE:
@@ -22,16 +21,19 @@ ARGS:
     <FILE>    The input file to check
 
 FLAGS:
-    -h, --help       Prints help information
-    -u, --unique     Unique only
-    -V, --version    Prints version information
+    -h, --help        Prints help information
+        --no-color    Don't colorize the output (only applies for stdout)
+    -u, --unique      Show unique gadget only
+    -v                Increase verbosity (repeatable from 1 to 4)
+    -V, --version     Prints version information
 
 OPTIONS:
-        --arch <arch>                Target architecture [default: x64]
-        --os <os>                    Target OS [default: win]
-    -o, --output-file <outfile>      Write all gadgets into file
-    -t, --nb-threads <thread_num>    The number of threads for processing the binary [default: 2]
-    -v <verbosity>...                Increase verbosity (repeatable)
+        --architecture <arch>                   Target architecture
+        --imagebase <image_base>                Use VALUE as image base
+    -l, --max-gadget-len <max_gadget_length>    Maximum size of a gadget [default: 16]
+        --os <os>                               Target OS
+    -o, --output-file <output_file>             Write all gadgets into file
+    -t, --nb-threads <thread_num>               The number of threads for processing the binary [default: 2]
 ```
 
 
@@ -60,33 +62,51 @@ $ cargo run -- --help
 
 ## Perfs
 
-Well yeah, it's pretty fast (thanks Rust) but I'll try to improve here and there.
+Well yeah, it's pretty fast (thanks Rust) but I'll try to improve here and there as I learn to write better Rust.
 
-For a lame benchmark: here on an old i5-4300M
+For a lame benchmark: here on an old i5-4300M (build in `--release` mode) with 2 threads (default)
 
  * `ntoskrnl.exe` (Windows 10 RS6 - 10.0.19041.329) - 10,921,280 bytes
+
 ```bash
-PS C:\Users\hugsy> cargo run -- --nb-threads 4 D:\Temp\ntoskrnl-rs6.exe
-Checking file 'D:\Temp\ntoskrnl-rs6.exe'
-looking for executables s in PE: 'D:\Temp\ntoskrnl-rs6.exe'
-[...]
-[INIT] 2360 gadget(s) found
-A total of 50488 gadgets were found
-Execution time: 22.503228s
+PS C:\Users\hugsy>  .\rp-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
+[INFO] - Checking file '.\ntoskrnl-rs6.exe'
+[INFO] - Creating new Session(file=.\ntoskrnl-rs6.exe, Info(Arch=x86-64, OS=PE))
+[INFO] - Looking for gadgets in 15 sections (with 2 threads)...'
+[INFO] - Dumping 336787 gadgets to 'rop.txt'...
+[INFO] - Done!
+[INFO] - Execution: 336787 gadgets found in 7.5224138s
 ```
 
  * `msedge.dll` (Chromium Edge - 83.0.478.64) - 145,665,416 bytes
+
 ```bash
-PS C:\Users\hugsy> cargo run -- --nb-threads 4 D:\Temp\msedge.dll
-Checking file 'D:\Temp\msedge.dll'
-looking for executables s in PE: 'D:\Temp\msedge.dll`
-[...]
-[.text] 679074 gadget(s) found
-A total of 679074 gadgets were found
-Execution time: 364.6681895s
+PS C:\Users\hugsy> .\rp-rs.exe -o rop.txt -vv .\msedge.dll
+[INFO] - Checking file '.\msedge.dll'
+[INFO] - Creating new Session(file=.\msedge.dll, Info(Arch=x86-64, OS=PE))
+[INFO] - Looking for gadgets in 1 sections (with 2 threads)...'
+[INFO] - Dumping 5713703 gadgets to 'rop.txt'...
+[INFO] - Done!
+[INFO] - Execution: 5713703 gadgets found in 151.2237842s
 ```
 
-YMMV
+YMMV but most small files (like Unix bins) will execute in way under 1 second.
+
+```bash
+wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
+[INFO] - Checking file '/bin/ls'
+[INFO] - Creating new Session(file=/bin/ls, Info(Arch=x86-64, OS=ELF))
+[INFO] - Looking for gadgets in 5 sections (with 2 threads)...'
+[INFO] - Dumping 3544 gadgets to '/dev/null'...
+[INFO] - Done!
+[INFO] - Execution: 3544 gadgets found in 111.5587ms
+```
+
+
+## Improvements to come
+
+ * Handle multiple binaries
+ * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
 
 
 ## Other projects

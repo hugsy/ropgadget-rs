@@ -295,7 +295,7 @@ fn main () -> GenericResult<()>
 
     if parse_binary_file(&mut sess)
     {
-        info!("New {}", sess);
+        info!("Creating new {}", sess);
 
         if let Some (sections) = &sess.sections
         {
@@ -310,18 +310,20 @@ fn main () -> GenericResult<()>
             let gadgets = &mut sess.gadgets;
 
             //
+            // sort by address
+            //
+            gadgets.sort_by(|a,b | a.address.cmp(&b.address));
+
+
+            //
             // if unique, filter out doublons
             //
             if sess.unique_only
             {
+                info!("Filtering out deplicate gadgets...");
                 gadgets.dedup_by(|a, b| a.text.eq_ignore_ascii_case(&b.text));
             }
 
-
-            //
-            // sort by address
-            //
-            gadgets.sort_by(|a,b | a.address.cmp(&b.address));
 
 
             if let Some(filename) = sess.output_file
