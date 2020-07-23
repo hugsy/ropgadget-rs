@@ -243,9 +243,9 @@ impl CapstoneDisassembler
                 InstructionGroup::Jump  => { if insns.len() > 0 { break; } }
                 InstructionGroup::Call  => { if insns.len() > 0 { break; } }
                 InstructionGroup::Ret  => { if insns.len() > 0 { break; } }
-                InstructionGroup::Privileged  => { break; }
-                InstructionGroup::Int  => { break; }
-                InstructionGroup::Iret  => { break; }
+                // InstructionGroup::Privileged  => { break; }
+                // InstructionGroup::Int  => { break; }
+                // InstructionGroup::Iret  => { break; }
                 _ => {}
             };
 

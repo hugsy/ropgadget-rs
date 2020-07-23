@@ -145,8 +145,10 @@ pub fn get_all_return_positions(cpu: &Arc<dyn cpu::Cpu>, section: &Section) -> G
 ///
 /// from the c3 at section.data[pos], disassemble previous insn
 ///
-pub fn find_gadgets_from_position(engine: &DisassemblyEngine, data: &[u8], start_address: u64, initial_position: usize, cpu: &Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
+pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
 {
+    let start_address = section.start_address.clone();
+    let data = &section.data[(initial_position-16)..initial_position+1]; // todo: use session.max_gadget_length
     let mut cur = Cursor::new(data);
 
     //

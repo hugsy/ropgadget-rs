@@ -249,7 +249,16 @@ impl Session
 
         let unique_only = matches.is_present("unique");
 
-        let use_color = !matches.is_present("no_color");
+        let mut use_color = !matches.is_present("no_color");
+
+        //
+        // if the output is redirected to a file, disregard the colorize setting anyway
+        //
+        match output_file
+        {
+            Some(_) => { use_color = false; }
+            _ => { }
+        }
 
         let max_gadget_length = match matches.value_of("max_gadget_length")
         {

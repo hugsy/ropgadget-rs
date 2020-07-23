@@ -34,16 +34,14 @@ fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: 
 {
     let mut gadgets: Vec<Gadget> = Vec::new();
 
-    for pos in get_all_return_positions(&cpu, section)?
+    for initial_position in get_all_return_positions(&cpu, section)?
     {
-        trace!("[{}] {:x} data[..{:x}]", section.name, section.start_address, pos);
+        trace!("[{}] {:x} data[..{:x}]", section.name, section.start_address, initial_position);
 
-        let data = &section.data[(pos-10)..pos+1]; // todo: use session.max_gadget_length
         let res = find_gadgets_from_position(
             engine,
-            data,
-            section.start_address,
-            pos,
+            section,
+            initial_position,
             &cpu,
             use_color
         );
@@ -334,7 +332,7 @@ fn main () -> GenericResult<()>
                         _ => { format!("0x{:08x}", g.address) }
                     };
 
-                    //println!("{} | {} | {:?}", addr, g.text, g.raw);
+                    //debug!("{} | {} | {:?}", addr, g.text, g.raw);
 
                     if sess.use_color
                     {
