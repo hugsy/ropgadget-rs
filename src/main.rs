@@ -3,14 +3,10 @@ extern crate bitflags;
 
 use std::fs;
 use std::io::prelude::*;
-use std::path::Path;
-use std::thread;
-use std::sync::Arc;
 
 use clap::{App, Arg};
 use colored::*;
-use goblin::Object;
-use log::{info, warn, error, debug, trace};
+use log::{info, warn, error, trace};
 
 mod common;
 mod error;
@@ -21,186 +17,9 @@ mod session;
 mod cpu;
 mod engine;
 
-
 use common::GenericResult;
-use gadget::{get_all_return_positions, find_gadgets_from_position, Gadget};
-use format::{pe, elf, mach};
 use session::Session;
-use engine::{DisassemblyEngine, DisassemblyEngineType};
 
-
-
-fn process_section(engine: &DisassemblyEngine, section: &section::Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
-{
-    let mut gadgets: Vec<Gadget> = Vec::new();
-
-    for initial_position in get_all_return_positions(&cpu, section)?
-    {
-        trace!("[{}] {:x} data[..{:x}]", section.name, section.start_address, initial_position);
-
-        let res = find_gadgets_from_position(
-            engine,
-            section,
-            initial_position,
-            &cpu,
-            use_color
-        );
-
-        if res.is_ok()
-        {
-            let mut g = res?;
-            debug!("new {:?}", g);
-            gadgets.append(&mut g);
-        }
-
-        //break;
-    }
-
-    Ok(gadgets)
-}
-
-
-fn thread_worker(section: &section::Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> Vec<Gadget>
-{
-    let engine = DisassemblyEngine::new(DisassemblyEngineType::Capstone, cpu.as_ref());
-    debug!("using engine: {}", &engine);
-    let gadgets = process_section(&engine, section, cpu, use_color).unwrap();
-    debug!("in {} - {} gadget(s) found", section.name.green().bold(), gadgets.len());
-    gadgets
-}
-
-
-//
-// returns true if no error occured
-//
-fn find_gadgets(session: &mut Session) -> bool
-{
-    let mut total_gadgets : usize = 0;
-    let use_color = session.use_color.clone();
-
-    if let Some(sections) = &session.sections
-    {
-        let nb_thread = session.nb_thread;
-
-
-        //
-        // multithread parsing of the sections (1 thread/section)
-        //
-
-        let mut i : usize = 0;
-
-        let cpu: Arc<dyn cpu::Cpu> = match session.info.cpu.as_ref().unwrap().cpu_type()
-        {
-            cpu::CpuType::X86 => {Arc::new(cpu::x86::X86{})}
-            cpu::CpuType::X64 => {Arc::new(cpu::x64::X64{})}
-        };
-
-        while i < sections.len()
-        {
-            let mut threads : Vec<std::thread::JoinHandle<_>> = Vec::new();
-
-            for n in 0..nb_thread
-            {
-                if let Some(section) = sections.get(i)
-                {
-                    let b= thread::Builder::new()
-                        .name(std::fmt::format( std::format_args!("thread-{}", n)));
-                    let c = cpu.clone();
-                    let s = section.clone(); // <-- HACK: this is ugly af and inefficient, learn to do better
-                    let thread = b.spawn(move || thread_worker(&s, c, use_color));
-                    debug!("spawning thread 'thread-{}'...", n);
-                    threads.push(thread.unwrap());
-                    i += 1;
-                }
-            }
-
-            for t in threads
-            {
-                match t.thread().name()
-                {
-                    Some(x) => { debug!("joining {}", x); }
-                    None => {}
-                }
-
-                let res = t.join();
-                if res.is_ok()
-                {
-                    let gadgets = res.unwrap();
-                    let cnt = gadgets.len();
-                    session.gadgets.extend(gadgets);
-                    total_gadgets += cnt;
-                }
-            }
-
-        }
-
-        debug!("total gadgets found => {}", total_gadgets);
-    }
-
-    true
-}
-
-
-///
-/// parse the given binary file
-///
-fn collect_executable_section(session: &mut Session) -> bool
-{
-    let input = &session.filepath;
-    let path = Path::new(input);
-    let buffer = fs::read(path).unwrap();
-
-    session.sections = match Object::parse(&buffer).unwrap()
-    {
-        Object::PE(pe) =>
-        {
-            Some( pe::prepare_pe_file(session, &pe).unwrap() )
-        },
-
-        Object::Elf(elf) =>
-        {
-            Some( elf::prepare_elf_file(session, &elf).unwrap())
-        },
-
-        Object::Mach(mach) =>
-        {
-            Some(mach::collect_executable_sections(&input, &mach).unwrap())
-        }
-
-        Object::Archive(_) =>
-        {
-            error!("Unsupported type");
-            None
-        },
-
-        Object::Unknown(magic) =>
-        {
-            error!("unknown magic {}", magic);
-            None
-        },
-    };
-
-    match session.sections
-    {
-        Some(_) => {true}
-        None => {false}
-    }
-}
-
-
-fn parse_binary_file(session: &mut Session) -> bool
-{
-    if !collect_executable_section(session)
-    {
-        return false;
-    }
-
-    //
-    // todo: collect more info
-    //
-
-    true
-}
 
 
 fn main () -> GenericResult<()>
@@ -288,19 +107,19 @@ fn main () -> GenericResult<()>
         );
 
     let mut sess = Session::new(app).unwrap();
-
     trace!("{:?}", sess);
 
-    info!("Checking file '{}'", sess.filepath.green().bold());
-
-    if parse_binary_file(&mut sess)
+    if sess.is_valid_session()
     {
         info!("Creating new {}", sess);
 
         if let Some (sections) = &sess.sections
         {
+            //
+            // the real meat of the tool
+            //
             info!("Looking for gadgets in {} sections (with {} threads)...'", sections.len(), sess.nb_thread);
-            if !find_gadgets(&mut sess)
+            if !sess.find_gadgets()
             {
                 error!("An error occured in `find_gadgets'");
                 return Ok(());
@@ -359,16 +178,14 @@ fn main () -> GenericResult<()>
                     {
                         println!("{} | {}", addr, g.text);
                     }
-
                 }
             }
-
             info!("Done!");
         }
     }
     else
     {
-        warn!("Failed to parse the given file, check the command line arguments...");
+        warn!("Failed to build the session, check your parameters...");
     }
 
     sess.end_timestamp = std::time::Instant::now();

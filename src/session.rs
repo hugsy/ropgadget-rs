@@ -1,12 +1,24 @@
+use std::fs;
+use std::thread;
+
+use std::sync::Arc;
+use std::path::Path;
+
 use clap::App;
 use colored::*;
-use log::{Record, Level, Metadata, LevelFilter};
+use log::{
+    Record, Level, Metadata, LevelFilter,
+    debug, info, error, trace
+};
+use goblin::Object;
 
-
-use crate::format::Format;
+use crate::common::GenericResult;
+use crate::format::{Format, pe, elf, mach};
 use crate::cpu;
-use crate::gadget::Gadget;
 use crate::section::Section;
+use crate::gadget::{get_all_return_positions, find_gadgets_from_position, Gadget};
+use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
+
 
 
 pub struct ExecutableDetail
@@ -290,6 +302,153 @@ impl Session
             }
         )
     }
+
+
+    ///
+    /// Parse the given binary file
+    ///
+    fn collect_executable_section(&mut self) -> bool
+    {
+        let input = &self.filepath;
+        let path = Path::new(input);
+        let buffer = fs::read(path).unwrap();
+
+        let sections = match Object::parse(&buffer).unwrap()
+        {
+            Object::PE(pe) =>
+            {
+                Some( pe::prepare_pe_file(self, &pe).unwrap() )
+            },
+
+            Object::Elf(elf) =>
+            {
+                Some( elf::prepare_elf_file( self, &elf).unwrap())
+            },
+
+            Object::Mach(mach) =>
+            {
+                Some(mach::collect_executable_sections(&input, &mach).unwrap())
+            }
+
+            Object::Archive(_) =>
+            {
+                error!("Unsupported type");
+                None
+            },
+
+            Object::Unknown(magic) =>
+            {
+                error!("unknown magic {}", magic);
+                None
+            },
+        };
+
+        match sections
+        {
+            Some(_) => {self.sections = sections; true}
+            None => {false}
+        }
+    }
+
+
+    ///
+    /// Parse the given binary file
+    ///
+    fn parse_binary_file(&mut self) -> bool
+    {
+        debug!("Checking file '{}'", self.filepath.green().bold());
+
+        if !self.collect_executable_section()
+        {
+            return false;
+        }
+
+        //
+        // todo: collect more info
+        //
+
+        true
+    }
+
+
+    ///
+    /// Checks if the session is valid
+    ///
+    pub fn is_valid_session(&mut self) -> bool
+    {
+        info!("Checking session paramters...");
+
+        self.parse_binary_file() && !self.sections.is_none()
+    }
+
+
+
+    //
+    // find all the gadgets in the different sections in parallel
+    // returns true if no error occured
+    //
+    pub fn find_gadgets(&mut self) -> bool
+    {
+        let mut total_gadgets : usize = 0;
+        let use_color = self.use_color;
+
+        if let Some(sections) = &self.sections
+        {
+            let nb_thread = self.nb_thread;
+
+
+            //
+            // multithread parsing of the sections (1 thread/section)
+            //
+
+            let mut i : usize = 0;
+
+            let cpu: Arc<dyn cpu::Cpu> = match self.info.cpu.as_ref().unwrap().cpu_type()
+            {
+                cpu::CpuType::X86 => {Arc::new(cpu::x86::X86{})}
+                cpu::CpuType::X64 => {Arc::new(cpu::x64::X64{})}
+            };
+
+            while i < sections.len()
+            {
+                let mut threads : Vec<std::thread::JoinHandle<_>> = Vec::new();
+
+                for n in 0..nb_thread
+                {
+                    if let Some(section) = sections.get(i)
+                    {
+                        let c = cpu.clone();
+                        let s = section.clone(); // <-- HACK: this is ugly af and inefficient, learn to do better
+                        let thread = thread::spawn(move || thread_worker(&s, c, use_color));
+                        debug!("spawning thread 'thread-{}'...", n);
+                        threads.push(thread);
+                        i += 1;
+                    }
+                }
+
+                for t in threads
+                {
+                    debug!("joining {:?}", t.thread().id());
+
+                    let res = t.join();
+                    if res.is_ok()
+                    {
+                        let gadgets = res.unwrap();
+                        let cnt = gadgets.len();
+                        &self.gadgets.extend(gadgets);
+                        total_gadgets += cnt;
+                    }
+                }
+
+            }
+
+            debug!("total gadgets found => {}", total_gadgets);
+        }
+
+        true
+    }
+
+
 }
 
 
@@ -323,4 +482,54 @@ impl std::fmt::Display for Session
             self.info
         )
     }
+}
+
+
+
+
+/*
+fn thread_worker(section: &Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> Vec<Gadget>
+{
+    */
+fn thread_worker(section: &Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> Vec<Gadget>
+{
+
+    let engine = DisassemblyEngine::new(DisassemblyEngineType::Capstone, cpu.as_ref());
+    debug!("using engine: {}", &engine);
+    let gadgets = process_section(&engine, section, cpu, use_color).unwrap();
+    debug!("in {} - {} gadget(s) found", section.name.green().bold(), gadgets.len());
+    gadgets
+    //info!("{:?} is running", thread::current().id());
+    //let g: Vec<Gadget> = Vec::new();
+    //g
+}
+
+
+fn process_section(engine: &DisassemblyEngine, section: &Section, cpu: Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
+{
+    let mut gadgets: Vec<Gadget> = Vec::new();
+
+    for initial_position in get_all_return_positions(&cpu, section)?
+    {
+        trace!("[{}] {:x} data[..{:x}]", section.name, section.start_address, initial_position);
+
+        let res = find_gadgets_from_position(
+            engine,
+            section,
+            initial_position,
+            &cpu,
+            use_color
+        );
+
+        if res.is_ok()
+        {
+            let mut g = res?;
+            debug!("new {:?}", g);
+            gadgets.append(&mut g);
+        }
+
+        //break;
+    }
+
+    Ok(gadgets)
 }

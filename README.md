@@ -2,7 +2,7 @@
 
 ## Why another ROP gadget finder?
 
-RopGadget-rs is a project because I had some time to kill, wanted a really fast & easily portable ropgadget finder even (especially!) for large binaries (ntoskrnl, chrome, etc.), and also to learn rust-lang. As a result it is barely functional, and the code is probably ugly and inefficient.
+RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a really fast & easily portable ropgadget finder even (especially!) for large binaries (ntoskrnl, chrome, etc.). As a result it is barely functional, and the code is probably ugly and inefficient.
 
 You've been warned, don't blame me...
 
