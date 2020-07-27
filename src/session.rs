@@ -23,8 +23,7 @@ use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 pub struct ExecutableDetail
 {
     pub format: Option<Format>,
-    pub cpu: Option<Box<dyn cpu::Cpu + Send + Sync>>,
-    pub cpu2: Box<dyn cpu::Cpu>,
+    pub cpu: Option<Box<dyn cpu::Cpu>>,
     pub entry_point_address: u64,
 }
 
@@ -53,7 +52,11 @@ impl ExecutableDetail
 {
     pub fn is_64b(&self) -> bool
     {
-        self.cpu2.ptrsize() == 8
+        if let Some(cpu) = &self.cpu
+        {
+            return cpu.ptrsize() == 8;
+        }
+        false
     }
 }
 
@@ -209,7 +212,25 @@ impl Session
         //
         // if the --arch option is given, the user tries to force the format
         //
+        /*
         let cpu: Option<Box<dyn cpu::Cpu + std::marker::Send + std::marker::Sync>> = match matches.value_of("arch")
+        {
+            Some(x) =>
+            {
+                match x
+                {
+                    "x86" => { Some(Box::new(cpu::x86::X86{})) }
+                    "x64" => { Some(Box::new(cpu::x64::X64{})) }
+                    "arm" => { todo!("soon") }
+                    "arm64" => { todo!("soon") }
+                    _ => { unimplemented!("unknown {}", x) }
+                }
+            }
+            None => { None }
+        };
+        */
+
+        let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
         {
             Some(x) =>
             {
@@ -288,10 +309,10 @@ impl Session
                 info: ExecutableDetail
                 {
                     format,
-                    cpu,
+                    //cpu,
                     entry_point_address: entry_point_address,
 
-                    cpu2: Box::new(cpu::x64::X64{}),
+                    cpu: cpu, //Box::new(cpu::x64::X64{}),
                 },
                 sections: None,
                 gadgets: Mutex::new(Vec::new()),
@@ -472,8 +493,14 @@ impl std::fmt::Display for Session
 
 fn thread_worker(session: Arc<Session>, index: usize) -> Vec<Gadget>
 {
-    let engine = DisassemblyEngine::new(&session.engine_type, &session.info.cpu2);
-    debug!("initialized engine {} for {:?}", engine, thread::current().id());
+    if session.info.cpu.is_none()
+    {
+        panic!();
+    }
+
+    let cpu = session.info.cpu.as_ref().unwrap();
+    let engine = DisassemblyEngine::new(&session.engine_type, cpu);
+    debug!("[{:?}] Initialized engine {} for {:?}", thread::current().id(), engine, cpu.cpu_type());
     process_section(session, index, &engine).unwrap()
 }
 
@@ -488,16 +515,17 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
         {
             debug!("{:?} is processing section '{}'", thread::current().id(), section.name);
 
-            for initial_position in get_all_return_positions(&session.info.cpu2, section)?
-            {
-                debug!("processing {}: {:x} data[..{:x}]", section.name, section.start_address, initial_position);
+            let cpu = &session.info.cpu.as_ref().unwrap();
 
+            for initial_position in get_all_return_positions(cpu, section)?
+            {
+                debug!("processing {} (start_address={:x}, size={:x}) slice[..{:x}]", section.name, section.start_address, section.size, initial_position);
 
                 let res = find_gadgets_from_position(
                     engine,
                     section,
                     initial_position,
-                    &session.info.cpu2
+                    cpu
                 );
 
                 if res.is_ok()
@@ -506,7 +534,6 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
                     debug!("new {:?}", g);
                     gadgets.append(&mut g);
                 }
-
                 //break;
             }
 
@@ -514,7 +541,7 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
         }
         else
         {
-            warn!("No section at index {} for {:?}, stopping...", index, thread::current().id());
+            warn!("No section at index {} for {:?}, ending thread...", index, thread::current().id());
         }
     }
     else

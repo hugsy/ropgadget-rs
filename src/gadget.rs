@@ -153,8 +153,15 @@ pub fn get_all_return_positions(cpu: &Box<dyn cpu::Cpu>, section: &Section) -> G
 ///
 pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Box<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
 {
+    let max_invalid_size = match cpu.cpu_type() // todo: use session.max_gadget_length
+    {
+        cpu::CpuType::X86 => { 16 }
+        cpu::CpuType::X64 => { 16 }
+    };
+
     let start_address = section.start_address.clone();
-    let data = &section.data[(initial_position-16)..initial_position+1]; // todo: use session.max_gadget_length
+    let s: usize = if initial_position < max_invalid_size { 0 } else { initial_position-max_invalid_size };
+    let data = &section.data[s..initial_position+1];
     let mut cur = Cursor::new(data);
 
     //
@@ -166,20 +173,14 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
     let step = cpu.insn_step();
     let mut gadgets : Vec<Gadget> = Vec::new();
 
-    let max_invalid_size = match cpu.cpu_type()
-    {
-        cpu::CpuType::X86 => { 16 }
-        cpu::CpuType::X64 => { 16 }
-    };
-
     loop
     {
         let mut candidate: Vec<u8> = vec![0; sz];
 
         //
-        // prevent underflow
+        // ensure we're still within the boundaries of the cursor
         //
-        if (sz - step) >= data.len() //initial_position
+        if (sz - step) >= data.len()
         {
             break;
         }
@@ -191,16 +192,15 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
         cur.seek( SeekFrom::End(current_position-1) )?;
         if cur.read_exact(&mut candidate).is_err()
         {
-            warn!("eof");
+            warn!("{:?} Cursor reached EOF", std::thread::current().id());
             break;
         }
 
-        assert_eq!( *candidate.last().unwrap(), 0xc3);
 
         //
         // disassemble the code from given position
         //
-        let addr = start_address + initial_position as u64 + cur.position() - sz as u64;
+        let addr = start_address + s as u64 + cur.position() - sz as u64;
         let insns = engine.disassemble(&candidate, addr as u64);
 
         //
