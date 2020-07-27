@@ -2,15 +2,14 @@ extern crate capstone;
 
 use std::fmt;
 use std::io::{Cursor, Read, SeekFrom, Seek};
-use std::sync::Arc;
 
-use log::{debug, info, warn};
+use log::{debug, warn};
 use colored::*;
 
 use crate::{section::Section, };
-use crate::{session::Session, };
 use crate::{common::GenericResult, };
 use crate::cpu;
+use crate::error;
 use crate::engine::{DisassemblyEngine, };
 
 
@@ -81,7 +80,6 @@ pub struct Gadget
     pub insns: Vec<Instruction>,
     pub size: usize,    // sum() of sizeof(each_instruction)
     pub raw: Vec<u8>,   // concat() of instruction.raw
-    pub text: String,   // concat() instruction.text
 }
 
 
@@ -89,31 +87,28 @@ impl fmt::Display for Gadget
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {
-        write!(f, "Gadget(addr={:#x}, text='{}')", self.address, self.text)
+        write!(f, "Gadget(addr={:#x}, text='{}')", self.address, self.text(false))
     }
 }
 
 
 impl Gadget
 {
-    pub fn new(insns: Vec<Instruction>, use_color : bool) -> Self
+    pub fn new(insns: Vec<Instruction>) -> Self
     {
         //
         // by nature, we should never be here if insns.len() is 0 (should at least have the
         // ret insn) so we assert() to be notified
         //
-        assert!( insns.len() > 0);
-
+        if insns.len() == 0
+        {
+            panic!( error::Error::GadgetBuildError );
+        }
 
         let size = insns
             .iter()
             .map(|x| x.size)
             .sum();
-
-        let text = insns
-            .iter()
-            .map(|i| i.text(use_color).clone() + " ; ")
-            .collect();
 
         let raw = insns
             .iter()
@@ -123,12 +118,23 @@ impl Gadget
 
         let address = insns.get(0).unwrap().address;
 
-        Self { size, text, raw, address, insns }
+        Self { size, raw, address, insns }
+    }
+
+
+
+    pub fn text(&self, use_color: bool) -> String
+    {
+        self.insns
+            .iter()
+            .map(|i| i.text(use_color).clone() + " ; ")
+            .collect()
     }
 }
 
 
-pub fn get_all_return_positions(cpu: &Arc<dyn cpu::Cpu>, section: &Section) -> GenericResult<Vec<usize>>
+
+pub fn get_all_return_positions(cpu: &Box<dyn cpu::Cpu>, section: &Section) -> GenericResult<Vec<usize>>
 {
     let data = &section.data;
     let res: Vec<usize> = data
@@ -145,7 +151,7 @@ pub fn get_all_return_positions(cpu: &Arc<dyn cpu::Cpu>, section: &Section) -> G
 ///
 /// from the c3 at section.data[pos], disassemble previous insn
 ///
-pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Arc<dyn cpu::Cpu>, use_color: bool) -> GenericResult<Vec<Gadget>>
+pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Box<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
 {
     let start_address = section.start_address.clone();
     let data = &section.data[(initial_position-16)..initial_position+1]; // todo: use session.max_gadget_length
@@ -162,8 +168,8 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
 
     let max_invalid_size = match cpu.cpu_type()
     {
-        cpu::CpuType::X86 => { 10 }
-        cpu::CpuType::X64 => { 10 }
+        cpu::CpuType::X86 => { 16 }
+        cpu::CpuType::X64 => { 16 }
     };
 
     loop
@@ -212,7 +218,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
                     {
                         InstructionGroup::Ret =>
                         {
-                            let gadget = Gadget::new(x, use_color);
+                            let gadget = Gadget::new(x);
                             if gadgets.iter().all( |x| x.address != gadget.address )
                             {
                                 debug!("pushing new gadget(pos={:x}, sz={}B)", gadget.address, gadget.raw.len());

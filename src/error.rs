@@ -5,7 +5,7 @@ pub enum Error
     ParsingError(goblin::error::Error),
     ThreadRuntimeError(std::boxed::Box<dyn std::any::Any + std::marker::Send>),
 
-    //GenericError(),
+    GenericError(&'static str),
     GadgetBuildError(),
 }
 

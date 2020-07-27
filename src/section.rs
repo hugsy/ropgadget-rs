@@ -56,17 +56,5 @@ impl Section
             data: vec![0; sz]
         }
     }
-
-    pub fn clone(&self) -> Self
-    {
-        Self {
-            start_address: self.start_address,
-            end_address: self.end_address,
-            size: self.size,
-            name: self.name.to_string(),
-            permission: self.permission,
-            data: self.data.iter().cloned().collect(),
-        }
-    }
 }
 

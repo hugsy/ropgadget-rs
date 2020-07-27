@@ -3,6 +3,7 @@ extern crate bitflags;
 
 use std::fs;
 use std::io::prelude::*;
+use std::sync::Arc;
 
 use clap::{App, Arg};
 use colored::*;
@@ -18,8 +19,8 @@ mod cpu;
 mod engine;
 
 use common::GenericResult;
+use error::Error;
 use session::Session;
-
 
 
 fn main () -> GenericResult<()>
@@ -106,53 +107,76 @@ fn main () -> GenericResult<()>
                 .default_value("16")
         );
 
-    let mut sess = Session::new(app).unwrap();
-    trace!("{:?}", sess);
+    let res = Session::new(app);
+    if res.is_none()
+    {
+        return Err(Error::GenericError("Failed to parse arguments"));
+    }
+
+    trace!("{:?}", res);
+
+    let mut sess = res.unwrap();
 
     if sess.is_valid_session()
     {
         info!("Creating new {}", sess);
 
+        let start_timestamp = std::time::Instant::now();
+
         if let Some (sections) = &sess.sections
         {
+            let total_gadgets_found: usize;
+            let use_color = sess.use_color.clone();
+            let unique_only = sess.unique_only.clone();
+            let outfile = sess.output_file.clone();
+            let entrypoint_address = sess.info.entry_point_address.clone();
+            let is_64b = sess.info.is_64b();
+
+
             //
             // the real meat of the tool
             //
             info!("Looking for gadgets in {} sections (with {} threads)...'", sections.len(), sess.nb_thread);
-            if !sess.find_gadgets()
+
+            let arc = Arc::new(sess);
             {
-                error!("An error occured in `find_gadgets'");
-                return Ok(());
+                if !session::find_gadgets(arc.clone())
+                {
+                    error!("An error occured in `find_gadgets'");
+                    return Ok(());
+                }
             }
 
 
-            let gadgets = &mut sess.gadgets;
+
 
             //
             // sort by address
             //
+            let mut gadgets = arc.gadgets.lock().unwrap();
             gadgets.sort_by(|a,b | a.address.cmp(&b.address));
+
+            total_gadgets_found = gadgets.len();
 
 
             //
             // if unique, filter out doublons
             //
-            if sess.unique_only
+            if unique_only
             {
                 info!("Filtering out deplicate gadgets...");
-                gadgets.dedup_by(|a, b| a.text.eq_ignore_ascii_case(&b.text));
+                gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(&b.text(false)));
             }
 
 
-
-            if let Some(filename) = sess.output_file
+            if let Some(filename) = outfile
             {
                 info!("Dumping {} gadgets to '{}'...", gadgets.len(), filename);
                 let mut file = fs::File::create(filename)?;
-                for g in gadgets
+                for g in &*gadgets
                 {
-                    let txt = g.text.as_str();
-                    let addr = sess.info.entry_point_address + g.address;
+                    let txt = g.text(use_color);
+                    let addr = entrypoint_address + g.address;
                     file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
                 }
             }
@@ -160,27 +184,36 @@ fn main () -> GenericResult<()>
             {
                 info!("Dumping {} gadgets to stdout...", gadgets.len());
 
-                for g in gadgets
+                for g in &*gadgets
                 {
-                    let addr = match sess.info.is_64b()
+                    let addr = match is_64b
                     {
                         true  => { format!("0x{:016x}", g.address) }
                         _ => { format!("0x{:08x}", g.address) }
                     };
 
-                    //debug!("{} | {} | {:?}", addr, g.text, g.raw);
-
-                    if sess.use_color
+                    if use_color
                     {
-                        println!("{} | {}", addr.red(), g.text);
+                        println!("{} | {}", addr.red(), g.text(use_color));
                     }
                     else
                     {
-                        println!("{} | {}", addr, g.text);
+                        println!("{} | {}", addr, g.text(use_color));
                     }
                 }
             }
+
             info!("Done!");
+
+
+            if log::log_enabled!( log::Level::Info )
+            {
+                let end_timestamp = std::time::Instant::now();
+                let elapsed = end_timestamp - start_timestamp;
+                //let execution_time = sess.start_timestamp.elapsed().as_secs_f64();
+                //info!("Execution time => {:?}", execution_time);
+                info!("Execution: {} gadgets found in {:?}", total_gadgets_found, elapsed);
+            }
         }
     }
     else
@@ -188,14 +221,8 @@ fn main () -> GenericResult<()>
         warn!("Failed to build the session, check your parameters...");
     }
 
-    sess.end_timestamp = std::time::Instant::now();
 
-    if log::log_enabled!( log::Level::Info )
-    {
-        //let execution_time = sess.start_timestamp.elapsed().as_secs_f64();
-        //info!("Execution time => {:?}", execution_time);
-        info!("Execution: {} gadgets found in {:?}", sess.gadgets.len(), sess.end_timestamp - sess.start_timestamp);
-    }
+
 
     Ok(())
 }

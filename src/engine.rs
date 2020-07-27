@@ -39,7 +39,8 @@ pub struct DisassemblyEngine
 
 impl DisassemblyEngine
 {
-    pub fn new(engine_type: DisassemblyEngineType, cpu: &dyn Cpu) -> Self
+    //pub fn new(engine_type: DisassemblyEngineType, cpu: &dyn Cpu) -> Self
+    pub fn new(engine_type: &DisassemblyEngineType, cpu: &Box<dyn Cpu>) -> Self
     {
         match engine_type
         {
@@ -125,7 +126,8 @@ impl std::fmt::Display for CapstoneDisassembler
 
 impl CapstoneDisassembler
 {
-    fn new(cpu: &dyn Cpu) -> Self
+    //fn new(cpu: &dyn Cpu) -> Self
+    fn new(cpu: &Box<dyn Cpu>) -> Self
     {
         let cs = match cpu.cpu_type()
         {
