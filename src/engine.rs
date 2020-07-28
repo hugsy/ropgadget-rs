@@ -1,6 +1,6 @@
 use capstone::prelude::*;
 
-use log::{trace, };
+use log::trace;
 
 use crate::cpu::{Cpu, CpuType};
 use crate::gadget::{Instruction, InstructionGroup};
@@ -39,7 +39,9 @@ pub struct DisassemblyEngine
 
 impl DisassemblyEngine
 {
-    //pub fn new(engine_type: DisassemblyEngineType, cpu: &dyn Cpu) -> Self
+    ///
+    ///
+    ///
     pub fn new(engine_type: &DisassemblyEngineType, cpu: &Box<dyn Cpu>) -> Self
     {
         match engine_type
@@ -56,12 +58,18 @@ impl DisassemblyEngine
     }
 
 
+    ///
+    ///
+    ///
     pub fn disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>
     {
         self.disassembler.disassemble(code, address)
     }
 
 
+    ///
+    ///
+    ///
     pub fn name(&self) -> String
     {
         self.disassembler.name()
@@ -181,7 +189,6 @@ impl CapstoneDisassembler
         {
             let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
 
-            // https://github.com/capstone-rust/capstone-rs/blob/master/capstone-sys/capstone/suite/test_group_name.py#L172
             trace!(
                 "insn '{} {}', detail={}",
                 cs_insn.mnemonic().unwrap_or("").to_string(),
@@ -219,7 +226,6 @@ impl CapstoneDisassembler
                 None => { None }
             };
 
-            //println!("insn={:?}", cs_insn);
             let insn = Instruction
             {
                 raw: cs_insn.bytes().to_vec(),
@@ -245,9 +251,6 @@ impl CapstoneDisassembler
                 InstructionGroup::Jump  => { if insns.len() > 0 { break; } }
                 InstructionGroup::Call  => { if insns.len() > 0 { break; } }
                 InstructionGroup::Ret  => { if insns.len() > 0 { break; } }
-                // InstructionGroup::Privileged  => { break; }
-                // InstructionGroup::Int  => { break; }
-                // InstructionGroup::Iret  => { break; }
                 _ => {}
             };
 

@@ -6,8 +6,8 @@ use std::io::{Cursor, Read, SeekFrom, Seek};
 use log::{debug, warn};
 use colored::*;
 
-use crate::{section::Section, };
-use crate::{common::GenericResult, };
+use crate::section::Section;
+use crate::common::GenericResult;
 use crate::cpu;
 use crate::error;
 use crate::engine::{DisassemblyEngine, };
@@ -234,7 +234,6 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
                 nb_invalid += 1;
                 if nb_invalid == max_invalid_size
                 {
-                    //last_valid_insns.clear();
                     break;
                 }
             }
