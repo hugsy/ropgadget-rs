@@ -75,7 +75,7 @@ PS C:\Users\hugsy>  .\rp-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
 [INFO] - Looking for gadgets in 15 sections (with 2 threads)...'
 [INFO] - Dumping 336787 gadgets to 'rop.txt'...
 [INFO] - Done!
-[INFO] - Execution: 336787 gadgets found in 7.5224138s
+[INFO] - Execution: 336787 gadgets found in 13.5224138s
 ```
 
  * `msedge.dll` (Chromium Edge - 83.0.478.64) - 145,665,416 bytes
@@ -87,10 +87,10 @@ PS C:\Users\hugsy> .\rp-rs.exe -o rop.txt -vv .\msedge.dll
 [INFO] - Looking for gadgets in 1 sections (with 2 threads)...'
 [INFO] - Dumping 5713703 gadgets to 'rop.txt'...
 [INFO] - Done!
-[INFO] - Execution: 5713703 gadgets found in 151.2237842s
+[INFO] - Execution: 5713703 gadgets found in 132.2237842s
 ```
 
-YMMV but most small files (like Unix bins) will execute in way under 1 second.
+YMMV but most small files (like Unix binaries) will execute in way under 1 second.
 
 ```bash
 wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
@@ -99,14 +99,17 @@ wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
 [INFO] - Looking for gadgets in 5 sections (with 2 threads)...'
 [INFO] - Dumping 3544 gadgets to '/dev/null'...
 [INFO] - Done!
-[INFO] - Execution: 3544 gadgets found in 111.5587ms
+[INFO] - Execution: 3544 gadgets found in 151.5587ms
 ```
 
 
 ## Improvements to come
 
+ * Add sequence of instructions (`call/jmp`, `ret imm`)
  * Handle multiple binaries
  * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
+ * MachO support (maybe)
+ * ARM/ARM64 support (maybe)
 
 
 ## Other projects

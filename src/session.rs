@@ -141,8 +141,8 @@ impl Session
                 {
                     4 => { LevelFilter::Trace } // -vvvv
                     3 => { LevelFilter::Debug } // -vvv
-                    2 => { LevelFilter::Info } // -vv
-                    1 => { LevelFilter::Warn } // -v
+                    2 => { LevelFilter::Info }  // -vv
+                    1 => { LevelFilter::Warn }  // -v
                     _ => { LevelFilter::Error }
                 }
             },
@@ -212,24 +212,6 @@ impl Session
         //
         // if the --arch option is given, the user tries to force the format
         //
-        /*
-        let cpu: Option<Box<dyn cpu::Cpu + std::marker::Send + std::marker::Sync>> = match matches.value_of("arch")
-        {
-            Some(x) =>
-            {
-                match x
-                {
-                    "x86" => { Some(Box::new(cpu::x86::X86{})) }
-                    "x64" => { Some(Box::new(cpu::x64::X64{})) }
-                    "arm" => { todo!("soon") }
-                    "arm64" => { todo!("soon") }
-                    _ => { unimplemented!("unknown {}", x) }
-                }
-            }
-            None => { None }
-        };
-        */
-
         let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
         {
             Some(x) =>
@@ -269,7 +251,7 @@ impl Session
                         match x.ptrsize()
                         {
                             4 => { 0x00000000 }
-                            8 => { 0x0000000140000000 }
+                            8 => { 0x0000000000000000 }
                             _ => { 0x00000000 }
                         }
                     }
@@ -309,10 +291,8 @@ impl Session
                 info: ExecutableDetail
                 {
                     format,
-                    //cpu,
-                    entry_point_address: entry_point_address,
-
-                    cpu: cpu, //Box::new(cpu::x64::X64{}),
+                    entry_point_address,
+                    cpu,
                 },
                 sections: None,
                 gadgets: Mutex::new(Vec::new()),
@@ -534,7 +514,6 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
                     debug!("new {:?}", g);
                     gadgets.append(&mut g);
                 }
-                //break;
             }
 
             debug!("{:?} finished processing section '{}'", thread::current().id(), section.name);
