@@ -31,7 +31,7 @@ jobs:
               uses: actions-rs/cargo@v1
               with:
                 command: build
-                args: -- --release
+                args: --release
 
             - name: Prepare artifact
               shell: bash
@@ -67,7 +67,7 @@ jobs:
               uses: actions-rs/cargo@v1
               with:
                 command: build
-                args: -- --release
+                args: --release
 
             - name: Prepare artifact
               shell: bash
