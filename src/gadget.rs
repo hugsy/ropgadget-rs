@@ -1,17 +1,16 @@
 extern crate capstone;
 
 use std::fmt;
-use std::io::{Cursor, Read, SeekFrom, Seek};
+use std::{sync::Arc, io::{Cursor, Read, SeekFrom, Seek}};
 
-use log::{debug, warn};
+use log::{debug, warn, info};
 use colored::*;
 
 use crate::section::Section;
 use crate::common::GenericResult;
 use crate::cpu;
 use crate::error;
-use crate::engine::{DisassemblyEngine, };
-
+use crate::{session::Session, engine::{DisassemblyEngine, }};
 
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -134,24 +133,51 @@ impl Gadget
 
 
 
-pub fn get_all_return_positions(cpu: &Box<dyn cpu::Cpu>, section: &Section) -> GenericResult<Vec<usize>>
+pub fn get_all_valid_positions_and_length(session: &Arc<Session>, cpu: &Box<dyn cpu::Cpu>, section: &Section) -> GenericResult<Vec<(usize, usize)>>
 {
     let data = &section.data;
-    let res: Vec<usize> = data
-        .iter()
-        .enumerate()
-        .filter(|x| (x.1) == cpu.ret_insn().get(0).unwrap().get(0).unwrap()) // todo: filter by any of the vec[u8]
-        .map(|x| x.0 )
-        .collect();
+    let mut res: Vec<(usize, usize)> = Vec::new();
+
+    if session.gadget_type == InstructionGroup::Ret || session.gadget_type == InstructionGroup::Undefined
+    {
+        debug!("inserting ret positions and length...");
+        for ret in cpu.ret_insn()
+        {
+            let sz = ret.len();
+            let mut v: Vec<(usize, usize)> = data.windows(sz).enumerate()
+                .filter(|(_, y)| y[0] == *ret.first().unwrap() )
+                //.filter(|(_, y)| ret.eq(y) )
+                .map(|(x, _)| (x, sz) )
+                .collect();
+
+            res.append(&mut v);
+        }
+    }
+
+    if session.gadget_type == InstructionGroup::Call || session.gadget_type == InstructionGroup::Undefined
+    {
+        debug!("inserting calls positions and length...");
+        for call in cpu.branch_insn()
+        {
+            let sz = call.len();
+            let mut v: Vec<(usize, usize)> = data.windows(sz).enumerate()
+                .filter(|(_, y)| y[0] == *call.first().unwrap() )
+                //.filter(|(_, y)| ret.eq(y) )
+                .map(|(x, _)| (x, sz) )
+                .collect();
+
+            res.append(&mut v);
+        }
+    }
 
     Ok(res)
 }
 
 
 ///
-/// from the c3 at section.data[pos], disassemble previous insn
+/// from the section.data[pos], disassemble previous instructions
 ///
-pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, cpu: &Box<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
+pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section, initial_position: usize, initial_len: usize, cpu: &Box<dyn cpu::Cpu>) -> GenericResult<Vec<Gadget>>
 {
     let max_invalid_size = match cpu.cpu_type() // todo: use session.max_gadget_length
     {
@@ -168,7 +194,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
     // browse the section for the largest gadget
     //
 
-    let mut sz: usize = 1;
+    let mut sz: usize = initial_len;
     let mut nb_invalid = 0;
     let step = cpu.insn_step();
     let mut gadgets : Vec<Gadget> = Vec::new();
@@ -184,6 +210,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
         {
             break;
         }
+
 
         //
         // jump to the position in the file
@@ -203,6 +230,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
         let addr = start_address + s as u64 + cur.position() - sz as u64;
         let insns = engine.disassemble(&candidate, addr as u64);
 
+
         //
         // transform the Vec<Instruction> into a valid gadget
         //
@@ -216,7 +244,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
                     let last_insn = x.last().unwrap();
                     match last_insn.group
                     {
-                        InstructionGroup::Ret =>
+                        InstructionGroup::Ret | InstructionGroup::Call =>
                         {
                             let gadget = Gadget::new(x);
                             if gadgets.iter().all( |x| x.address != gadget.address )

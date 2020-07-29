@@ -28,9 +28,9 @@ impl cpu::Cpu for X64
     {
         vec![
             vec![0xc3, ], // ret
-            vec![0xc2, ], // ret imm
             vec![0xcb, ], // retf
-            vec![0xcf, ], // retf imm
+            vec![0xc2, 0x00, 0x00], // ret imm
+            vec![0xca, 0x00, 0x00], // retf imm
         ]
     }
 
@@ -38,10 +38,10 @@ impl cpu::Cpu for X64
     fn branch_insn(&self) -> Vec<Vec<u8>>
     {
         vec![
-            vec![0xff, ], // call/jmp
-            vec![0xeb, ], // jmp/call
-            vec![0xe9, ], // jmp/call
-            vec![0xff, 0xff], // jmp/call
+            vec![0xff, 0x00],
+            vec![0xe8, 0x00, 0x00, 0x00, 0x00, ],
+            vec![0xe9, 0x00, 0x00, 0x00, 0x00, ],
+            vec![0xff, 0x00, 0x00, 0x00, 0x00, 0x00],
         ]
     }
 

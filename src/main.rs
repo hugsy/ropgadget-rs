@@ -9,6 +9,7 @@ use clap::{App, Arg};
 use colored::*;
 use log::{info, warn, error, trace};
 
+mod constants;
 mod common;
 mod error;
 mod gadget;
@@ -25,10 +26,10 @@ use session::Session;
 
 fn main () -> GenericResult<()>
 {
-    let app = App::new("rp-rs")
-        .version("0.1")
-        .author("hugsy")
-        .about("Another (bad) ROP gadget finder")
+    let app = App::new(constants::APPLICATION_SHORTNAME)
+        .version(constants::VERSION)
+        .author(constants::AUTHOR)
+        .about(constants::DESCRIPTION)
 
         .arg(
             Arg::new("file")
@@ -105,7 +106,16 @@ fn main () -> GenericResult<()>
                 .about("Maximum size of a gadget")
                 .takes_value(true)
                 .default_value("16")
-        );
+        )
+
+        .arg(
+            Arg::with_name("rop_type")
+                .long("type")
+                .about("Type of ROP gadgets to find ('all', 'ret', 'call')")
+                .takes_value(true)
+                .default_value("all")
+        )
+    ;
 
     let res = Session::new(app);
     if res.is_none()

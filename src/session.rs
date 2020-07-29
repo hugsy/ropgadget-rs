@@ -15,7 +15,7 @@ use crate::common::GenericResult;
 use crate::format::{Format, pe, elf, mach};
 use crate::cpu;
 use crate::section::Section;
-use crate::gadget::{get_all_return_positions, find_gadgets_from_position, Gadget};
+use crate::gadget::{get_all_valid_positions_and_length, find_gadgets_from_position, Gadget, InstructionGroup};
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 
 
@@ -119,6 +119,7 @@ pub struct Session
     pub gadgets: Mutex<Vec<Gadget>>,
     pub unique_only: bool,
     pub use_color: bool,
+    pub gadget_type: InstructionGroup,
 }
 
 
@@ -280,6 +281,19 @@ impl Session
             None => { 16 }
         };
 
+        let gadget_type = match  matches.value_of("rop_type")
+        {
+            Some(x) =>
+            {
+                match x
+                {
+                    "ret" => { InstructionGroup::Ret }
+                    "call" => { InstructionGroup::Call }
+                    _ => { InstructionGroup::Undefined }
+                }
+            }
+            None => { InstructionGroup::Undefined }
+        };
 
         Some(
             Session
@@ -296,9 +310,10 @@ impl Session
                 },
                 sections: None,
                 gadgets: Mutex::new(Vec::new()),
-                unique_only: unique_only,
-                use_color: use_color,
+                unique_only,
+                use_color,
                 max_gadget_length,
+                gadget_type,
                 engine_type: DisassemblyEngineType::Capstone,
             }
         )
@@ -497,14 +512,17 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
 
             let cpu = &session.info.cpu.as_ref().unwrap();
 
-            for initial_position in get_all_return_positions(cpu, section)?
+            dbg!(session.gadget_type);
+
+            for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)?
             {
-                debug!("processing {} (start_address={:x}, size={:x}) slice[..{:x}]", section.name, section.start_address, section.size, initial_position);
+                debug!("processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ", section.name, section.start_address, section.size, pos, len);
 
                 let res = find_gadgets_from_position(
                     engine,
                     section,
-                    initial_position,
+                    pos,
+                    len,
                     cpu
                 );
 

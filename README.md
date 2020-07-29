@@ -1,6 +1,6 @@
 # ropgadget-rs
 
-![Github Actions CI](https://github.com/hugsy/rp-rs/workflows/Github%20Actions%20CI/badge.svg)
+[![Github Actions CI](https://github.com/hugsy/rp-rs/workflows/Github%20Actions%20CI/badge.svg)](https://github.com/hugsy/rp-rs/actions)
 
 ## Why another ROP gadget finder?
 
@@ -107,7 +107,6 @@ wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
 
 ## Improvements to come
 
- * Add sequence of instructions (`call/jmp`, `ret imm`)
  * Handle multiple binaries
  * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
  * MachO support (maybe)
