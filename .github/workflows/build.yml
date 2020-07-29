@@ -17,21 +17,21 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v1
               with:
-              fetch-depth: 1
+                fetch-depth: 1
 
             - name: Install rust
               uses: actions-rs/toolchain@v1
               with:
-              profile: minimal
-              toolchain: nightly
-              components: rustfmt, clippy
-              override: true
+                profile: minimal
+                toolchain: nightly
+                components: rustfmt, clippy
+                override: true
 
             - name: Cargo build
               uses: actions-rs/cargo@v1
               with:
-              command: build
-              args: -- --release
+                command: build
+                args: -- --release
 
             - name: Prepare artifact
               shell: bash
@@ -42,5 +42,5 @@ jobs:
             - name: Publish artifact
               uses: actions/upload-artifact@v2
               with:
-                  name: rp_rs_latest_x64
-                  path: build/
+                name: rp_rs_latest_x64
+                path: build/
