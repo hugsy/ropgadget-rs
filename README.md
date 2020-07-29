@@ -1,5 +1,7 @@
 # ropgadget-rs
 
+![Github Actions CI](https://github.com/hugsy/rp-rs/workflows/Github%20Actions%20CI/badge.svg)
+
 ## Why another ROP gadget finder?
 
 RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a really fast & easily portable ropgadget finder even (especially!) for large binaries (ntoskrnl, chrome, etc.). As a result it is barely functional, and the code is probably ugly and inefficient.
