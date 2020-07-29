@@ -10,9 +10,9 @@ env:
     RUST_BACKTRACE: 1
 
 jobs:
-    build:
-        name: ci build
-        runs-on: [ubuntu-latest, windows-latest]
+    windows_build:
+        name: windows  ci build
+        runs-on: [windows-latest]
         steps:
             - name: Checkout
               uses: actions/checkout@v1
@@ -42,5 +42,41 @@ jobs:
             - name: Publish artifact
               uses: actions/upload-artifact@v2
               with:
-                name: rp_rs_latest_x64
+                name: rp_rs_latest_lin_x64
+                path: build/
+
+
+    ms_build:
+        name: windows ci build
+        runs-on: [windows-latest]
+        steps:
+            - name: Checkout
+            uses: actions/checkout@v1
+            with:
+                fetch-depth: 1
+
+            - name: Install rust
+            uses: actions-rs/toolchain@v1
+            with:
+                profile: minimal
+                toolchain: nightly
+                components: rustfmt, clippy
+                override: true
+
+            - name: Cargo build
+            uses: actions-rs/cargo@v1
+            with:
+                command: build
+                args: -- --release
+
+            - name: Prepare artifact
+            shell: bash
+            run: |
+                mkdir build/
+                cp target/release/rp-rs* build/
+
+            - name: Publish artifact
+            uses: actions/upload-artifact@v2
+            with:
+                name: rp_rs_latest_win_x64
                 path: build/
