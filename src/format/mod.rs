@@ -9,7 +9,8 @@ pub enum Format
 {
     Pe,
     Elf,
-    // todo: Macho, Raw,
+    Mach,
+    // todo: Raw,
 }
 
 
@@ -21,6 +22,7 @@ impl std::fmt::Display for Format
         {
             Format::Pe => { "PE" }
             Format::Elf => { "ELF" }
+            Format::Mach => { "Mach" }
         };
 
         write!(f, "OS={}", val)

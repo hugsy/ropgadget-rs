@@ -209,7 +209,7 @@ impl Session
                 {
                     "win" => { Some(Format::Pe) }
                     "lin" => { Some(Format::Elf) }
-                    "osx" => { todo!("soon") }
+                    "osx" => { Some(Format::Mach) }
                     "raw" => { todo!("soon") }
                     _ => { unimplemented!("unknown {}", x) }
                 }
@@ -374,7 +374,7 @@ impl Session
 
             Object::Mach(mach) =>
             {
-                Some(mach::collect_executable_sections(&input, &mach).unwrap())
+                Some(mach::prepare_mach_file(self, &mach).unwrap())
             }
 
             Object::Archive(_) =>
@@ -385,6 +385,8 @@ impl Session
 
             Object::Unknown(magic) =>
             {
+                //todo:
+                //Some(mach::prepare_raw_file(self).unwrap())
                 error!("unknown magic {}", magic);
                 None
             },

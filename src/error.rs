@@ -7,6 +7,7 @@ pub enum Error
 
     GenericError(&'static str),
     GadgetBuildError(),
+    MismatchFileFormatError(&'static str),
 }
 
 
@@ -15,7 +16,6 @@ pub struct GenericError
 {
     msg: String
 }
-
 
 impl std::fmt::Display for GenericError
 {
@@ -72,3 +72,4 @@ impl std::fmt::Display for InvalidFormatError
 }
 
 
+pub struct MismatchFileFormatError {}

@@ -66,14 +66,14 @@ fn main () -> GenericResult<()>
         .arg(
             Arg::with_name("arch")
                 .long("architecture")
-                .about("Target architecture")
+                .about("Force target architecture ('x86', 'x64'), if not set, detected from file")
                 .takes_value(true)
         )
 
         .arg(
             Arg::with_name("os")
                 .long("os")
-                .about("Target OS")
+                .about("Force OS architecture ('lin', 'win', 'osx'), if not set, detected from file")
                 .takes_value(true)
         )
 

@@ -1,13 +1,15 @@
-use goblin::pe::PE;
-use colored::*;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, BufReader};
+
+use goblin::pe::PE;
+use colored::*;
 use log::{debug,};
 
 use crate::{
     section::Permission,
     section::Section,
     common::GenericResult,
+    error::Error,
     session::Session,
 
     cpu::x86::X86,
@@ -29,6 +31,18 @@ pub fn prepare_pe_file(session: &mut Session, pe: &PE ) -> GenericResult<Vec<Sec
     {
         session.info.format = Some(Format::Pe);
     }
+    else
+    {
+        if let Some(fmt) = &session.info.format
+        {
+            match fmt
+            {
+                Format::Pe => {}
+                _ => { return Err(Error::MismatchFileFormatError("incorrect format specified as parameter")); }
+            }
+        }
+    }
+
 
 
     if session.info.cpu.is_none()
@@ -41,8 +55,8 @@ pub fn prepare_pe_file(session: &mut Session, pe: &PE ) -> GenericResult<Vec<Sec
         {
             goblin::pe::header::COFF_MACHINE_X86 => { Some(Box::new(X86{})) }
             goblin::pe::header::COFF_MACHINE_X86_64 => { Some(Box::new(X64{})) }
-            //goblin::pe::header::COFF_MACHINE_ARM => { Box::new(cpu::arm64::ARM64{}) }
-            //goblin::pe::header::COFF_MACHINE_ARM64 => { Box::new(cpu::arm::ARM{}) }
+            goblin::pe::header::COFF_MACHINE_ARM => { todo!() /*Box::new(cpu::arm64::ARM64{})*/ }
+            goblin::pe::header::COFF_MACHINE_ARM64 => { todo!() /*Box::new(cpu::arm::ARM{})*/ }
             _ => { panic!("PE is corrupted") }
         };
     }
@@ -56,11 +70,11 @@ pub fn prepare_pe_file(session: &mut Session, pe: &PE ) -> GenericResult<Vec<Sec
 ///
 ///
 ///
-pub fn collect_executable_sections(path: &str, pe: &PE) -> GenericResult<Vec<Section>>
+fn collect_executable_sections(path: &str, pe: &PE) -> GenericResult<Vec<Section>>
 {
     let mut executable_sections : Vec<Section> = Vec::new() ;
 
-    debug!("looking for executables s in PE: '{}'", path.bold());
+    debug!("looking for executable sections in PE: '{}'", path.bold());
 
     let file = File::open(path)?;
     let mut reader = BufReader::new( file);

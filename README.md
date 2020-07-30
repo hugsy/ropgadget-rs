@@ -8,6 +8,9 @@ RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a 
 
 You've been warned, don't blame me...
 
+Currently support ELF/PE/Mach formats, and X86/X64 architectures.
+
+
 ## rp-rs
 
 ```bash
@@ -109,8 +112,7 @@ wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
 
  * Handle multiple binaries
  * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
- * MachO support (maybe)
- * ARM/ARM64 support (maybe)
+  * ARM/ARM64 support (maybe)
 
 
 ## Other projects

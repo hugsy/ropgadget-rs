@@ -5,6 +5,7 @@ use log::{debug, trace};
 use colored::*;
 
 use crate::{
+    error::Error,
     section::Permission,
     section::Section,
     common::GenericResult,
@@ -24,6 +25,17 @@ pub fn prepare_elf_file(session: &mut Session, elf: &Elf ) -> GenericResult<Vec<
     if session.info.format.is_none()
     {
         session.info.format = Some(Format::Elf);
+    }
+    else
+    {
+        if let Some(fmt) = &session.info.format
+        {
+            match fmt
+            {
+                Format::Elf => {}
+                _ => { return Err(Error::MismatchFileFormatError("incorrect format specified as parameter")); }
+            }
+        }
     }
 
 
@@ -46,6 +58,7 @@ pub fn prepare_elf_file(session: &mut Session, elf: &Elf ) -> GenericResult<Vec<
                 }
             }
             */
+            goblin::elf::header::EM_ARM => { todo!() }
             _ => { panic!("Elf is corrupted") }
         };
     }
@@ -55,7 +68,7 @@ pub fn prepare_elf_file(session: &mut Session, elf: &Elf ) -> GenericResult<Vec<
 }
 
 
-pub fn collect_executable_sections(path: &str, elf: &Elf) -> GenericResult<Vec<Section>>
+fn collect_executable_sections(path: &str, elf: &Elf) -> GenericResult<Vec<Section>>
 {
     let mut executable_sections : Vec<Section> = Vec::new() ;
     debug!("looking for executables s in ELF: '{}'", path.bold());
