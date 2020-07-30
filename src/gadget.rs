@@ -3,14 +3,14 @@ extern crate capstone;
 use std::fmt;
 use std::{sync::Arc, io::{Cursor, Read, SeekFrom, Seek}};
 
-use log::{debug, warn, info};
+use log::{debug, warn, };
 use colored::*;
 
 use crate::section::Section;
 use crate::common::GenericResult;
 use crate::cpu;
 use crate::error;
-use crate::{session::Session, engine::{DisassemblyEngine, }};
+use crate::{session::{RopProfileStrategy, Session}, engine::{DisassemblyEngine, }};
 
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -151,6 +151,12 @@ pub fn get_all_valid_positions_and_length(session: &Arc<Session>, cpu: &Box<dyn 
                 .collect();
 
             res.append(&mut v);
+
+            match session.profile_type
+            {
+                RopProfileStrategy::Fast => { break; }
+                _ => {}
+            }
         }
     }
 
@@ -167,6 +173,12 @@ pub fn get_all_valid_positions_and_length(session: &Arc<Session>, cpu: &Box<dyn 
                 .collect();
 
             res.append(&mut v);
+
+            match session.profile_type
+            {
+                RopProfileStrategy::Fast => { break; }
+                _ => {}
+            }
         }
     }
 

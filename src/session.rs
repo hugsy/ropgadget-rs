@@ -19,6 +19,12 @@ use crate::gadget::{get_all_valid_positions_and_length, find_gadgets_from_positi
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 
 
+pub enum RopProfileStrategy
+{
+    Fast,
+    Complete,
+}
+
 
 pub struct ExecutableDetail
 {
@@ -120,6 +126,7 @@ pub struct Session
     pub unique_only: bool,
     pub use_color: bool,
     pub gadget_type: InstructionGroup,
+    pub profile_type: RopProfileStrategy,
 }
 
 
@@ -289,10 +296,33 @@ impl Session
                 {
                     "ret" => { InstructionGroup::Ret }
                     "call" => { InstructionGroup::Call }
-                    _ => { InstructionGroup::Undefined }
+                    "all" => { InstructionGroup::Undefined }
+                    _ =>
+                    {
+                        warn!("Invalid gadget search type, using default...");
+                        InstructionGroup::Undefined
+                    }
                 }
             }
             None => { InstructionGroup::Undefined }
+        };
+
+        let profile_type = match  matches.value_of("profile_type")
+        {
+            Some(x) =>
+            {
+                match x
+                {
+                    "complete" => { RopProfileStrategy::Complete }
+                    "fast" => { RopProfileStrategy::Fast }
+                    _ =>
+                    {
+                        warn!("Invalid profile, using default...");
+                        RopProfileStrategy::Fast
+                    }
+                }
+            }
+            None => { RopProfileStrategy::Fast }
         };
 
         Some(
@@ -314,6 +344,7 @@ impl Session
                 use_color,
                 max_gadget_length,
                 gadget_type,
+                profile_type,
                 engine_type: DisassemblyEngineType::Capstone,
             }
         )
@@ -511,8 +542,6 @@ fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngi
             debug!("{:?} is processing section '{}'", thread::current().id(), section.name);
 
             let cpu = &session.info.cpu.as_ref().unwrap();
-
-            dbg!(session.gadget_type);
 
             for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)?
             {

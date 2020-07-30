@@ -94,7 +94,7 @@ fn main () -> GenericResult<()>
         .arg(
             Arg::with_name("verbosity")
                 .short('v')
-                .about("Increase verbosity (repeatable from 1 to 4)")
+                .about("Increase verbosity (repeatable from 1 - info - to 4 - debug)")
                 .multiple(true)
                 .takes_value(false)
         )
@@ -114,6 +114,14 @@ fn main () -> GenericResult<()>
                 .about("Type of ROP gadgets to find ('all', 'ret', 'call')")
                 .takes_value(true)
                 .default_value("all")
+        )
+
+        .arg(
+            Arg::with_name("profile_type")
+                .long("profile")
+                .about("Type of ROP gadgets to find ('fast', 'complete')")
+                .takes_value(true)
+                .default_value("fast")
         )
     ;
 
