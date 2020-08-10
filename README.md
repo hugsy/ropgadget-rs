@@ -62,6 +62,14 @@ $ cargo run -- --help
 ```
 
 
+## Install
+
+Via `cargo`:
+
+```bash
+$ cargo install --bins --git https://github.com/hugsy/rp-rs.git
+```
+
 ## Perfs
 
 Well yeah, it's pretty fast (thanks Rust) but I'll try to improve here and there as I learn to write better Rust.
