@@ -199,7 +199,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
 
     let start_address = section.start_address.clone();
     let s: usize = if initial_position < max_invalid_size { 0 } else { initial_position-max_invalid_size };
-    let data = &section.data[s..initial_position+1];
+    let data = &section.data[s..initial_position+initial_len];
     let mut cur = Cursor::new(data);
 
     //
@@ -253,8 +253,7 @@ pub fn find_gadgets_from_position(engine: &DisassemblyEngine, section: &Section,
                 nb_invalid = 0;
                 if x.len() > 0
                 {
-                    let last_insn = x.last().unwrap();
-                    match last_insn.group
+                    match x.last().unwrap().group
                     {
                         InstructionGroup::Ret | InstructionGroup::Call =>
                         {
