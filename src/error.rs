@@ -70,6 +70,3 @@ impl std::fmt::Display for InvalidFormatError
         write!(f, "Unknown/unsupported format: {}'", self.format)
     }
 }
-
-
-pub struct MismatchFileFormatError {}

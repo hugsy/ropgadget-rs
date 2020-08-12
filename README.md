@@ -8,7 +8,7 @@ RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a 
 
 You've been warned, don't blame me...
 
-Currently support ELF/PE/Mach formats, and X86/X64 architectures.
+Currently support ELF/PE/Mach formats, and x86/x64 architectures.
 
 
 ## rp-rs
@@ -27,7 +27,7 @@ ARGS:
 
 FLAGS:
     -h, --help        Prints help information
-        --no-color    Don't colorize the output (only applies for stdout)
+        --no-color    Do not colorize the output (only applies for stdout)
     -u, --unique      Show unique gadget only
     -v                Increase verbosity (repeatable from 1 to 4)
     -V, --version     Prints version information
@@ -112,12 +112,12 @@ wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
 
  * Handle multiple binaries
  * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
-  * ARM/ARM64 support (maybe)
+ * ARM/ARM64 support (maybe)
 
 
-## Other projects
+## Better projects
 
 Unless you're ok with experiencing my bugs, you should probably check out one of those projects:
  - [rp++](https://github.com/0vercl0k/rp)
- - [RopGadget](https://github.com/JonathanSalwan/ROPgadget)
  - [ropper](https://github.com/sashs/ropper)
+ - [RopGadget](https://github.com/JonathanSalwan/ROPgadget)
