@@ -1,82 +1,64 @@
 name: CI Build
 
 on:
-    pull_request:
-    push:
-        branches:
-        - master
+  push:
+  workflow_dispatch:
 
 env:
-    RUST_BACKTRACE: 1
+  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+  PROJECT_NAME: "rp-rs"
+  REPO: hugsy/rp-rs
+  VERBOSE: "1"
+  RUST_BACKTRACE: 1
 
 jobs:
-    linux_build:
-        name: linux ci build
-        runs-on: [ubuntu-latest]
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v1
-              with:
-                fetch-depth: 1
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest']
+        target:
+        - i686-unknown-linux-gnu
+        - aarch64-unknown-linux-gnu
+        - i686-pc-windows-msvc
+        - x86_64-pc-windows-msvc
+        - x86_64-apple-darwin
 
-            - name: Install rust
-              uses: actions-rs/toolchain@v1
-              with:
-                profile: minimal
-                toolchain: nightly
-                components: rustfmt, clippy
-                override: true
+    name: "build_${{ matrix.target }}"
+    runs-on: ${{ matrix.os }}
 
-            - name: Cargo build
-              uses: actions-rs/cargo@v1
-              with:
-                command: build
-                args: --release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
 
-            - name: Prepare artifact
-              shell: bash
-              run: |
-                  mkdir build/
-                  cp target/release/rp-rs* build/
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-            - name: Publish artifact
-              uses: actions/upload-artifact@v2
-              with:
-                name: rp_rs_lin_x64_$GITHUB_SHA
-                path: build/
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+            profile: minimal
+            toolchain: nightly
+            components: rustfmt, clippy
+            override: true
+            target: ${{ matrix.target }}
 
+      - name: Cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }}
 
-    windows_build:
-        name: windows ci build
-        runs-on: [windows-latest]
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v1
-              with:
-                fetch-depth: 1
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir build
+          cp -v target/release/rp-rs* build/
 
-            - name: Install rust
-              uses: actions-rs/toolchain@v1
-              with:
-                profile: minimal
-                toolchain: nightly
-                components: rustfmt, clippy
-                override: true
-
-            - name: Cargo build
-              uses: actions-rs/cargo@v1
-              with:
-                command: build
-                args: --release
-
-            - name: Prepare artifact
-              shell: bash
-              run: |
-                mkdir build/
-                cp target/release/rp-rs* build/
-
-            - name: Publish artifact
-              uses: actions/upload-artifact@v2
-              with:
-                name: rp_rs_win_x64_$GITHUB_SHA
-                path: build/
+      - name: Publish artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.PROJECT_NAME}}_${{ matrix.target}}_${{ env.GITHUB_REF_SLUG }}_${{ env.GITHUB_SHA_SHORT }}
+          path: build/

@@ -400,7 +400,7 @@ fn process_section(
     if let Some(sections) = &session.sections {
         if let Some(section) = sections.get(index) {
             debug!(
-                "{:?} is processing section '{}'",
+                "[Thread-{:?}] Processing section '{}'",
                 thread::current().id(),
                 section.name
             );
@@ -409,7 +409,8 @@ fn process_section(
 
             for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)? {
                 debug!(
-                    "processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ",
+                    "[Thread-{:?}] Processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ",
+                    thread::current().id(),
                     section.name, section.start_address, section.size, pos, len
                 );
 
@@ -423,20 +424,20 @@ fn process_section(
             }
 
             debug!(
-                "{:?} finished processing section '{}'",
+                "[Thread-{:?}] finished processing section '{}'",
                 thread::current().id(),
                 section.name
             );
         } else {
             warn!(
-                "No section at index {} for {:?}, ending thread...",
+                "[Thread-{:?}] No section at index {}, ending...",
+                thread::current().id(),
                 index,
-                thread::current().id()
             );
         }
     } else {
         panic!(
-            "{:?}: critical fail of process_section({:?}, {})",
+            "[Thread-{:?}] process_section({:?}, {}) failed critically, aborting...",
             thread::current().id(),
             session,
             index
