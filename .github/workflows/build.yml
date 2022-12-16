@@ -78,6 +78,7 @@ jobs:
         shell: bash
         run: |
           mkdir build
+          cargo install --path . --root build
           cp -v target/release/rp-rs* build/
 
       - name: Publish artifact
