@@ -1,15 +1,19 @@
 [package]
 name = "rp-rs"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["hugsy <hugsy@blah.cat>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Another (bad) ROP gadget finder"
+homepage = "https://github.com/hugsy/rp-rs/"
+repository = "https://github.com/hugsy/rp-rs/"
+readme = "README.md"
+license = "MIT"
+keywords = ["pwn", "ctf", "x64", "x86", "arm", "arm64"]
 
 [dependencies]
-goblin = "0.2.3"
-capstone = "0.7.0"
-clap = "3.0.0-beta.1"
+goblin = "0.6.0"
+capstone = "0.11.0"
+clap = { version = "4.0.29", features = ["derive"] }
 colored = "2"
 bitflags = "1.2.1"
 log = {version = "0.4.11", features = ["std",]}

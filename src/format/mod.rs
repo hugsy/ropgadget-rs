@@ -1,38 +1,37 @@
-pub mod pe;
 pub mod elf;
 pub mod mach;
+pub mod pe;
 
-use crate::{section::Section, common::GenericResult};
+use crate::{common::GenericResult, section::Section};
 
-#[derive(Debug)]
-pub enum Format
-{
+use clap::ValueEnum;
+
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum Format {
     Pe,
     Elf,
     Mach,
     // todo: Raw,
 }
 
-
-impl std::fmt::Display for Format
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
-        let val = match self
-        {
-            Format::Pe => { "PE" }
-            Format::Elf => { "ELF" }
-            Format::Mach => { "Mach" }
+impl std::fmt::Display for Format {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let val = match self {
+            Format::Pe => "PE",
+            Format::Elf => "ELF",
+            Format::Mach => "Mach",
         };
 
         write!(f, "OS={}", val)
     }
 }
 
-
-pub trait ExecutableFormat
-{
+pub trait ExecutableFormat {
     type Fmt;
 
-    fn collect_executable_sections(&self, path: &str, exec: &Self::Fmt) -> GenericResult<Vec<Section>>;
+    fn collect_executable_sections(
+        &self,
+        path: &str,
+        exec: &Self::Fmt,
+    ) -> GenericResult<Vec<Section>>;
 }

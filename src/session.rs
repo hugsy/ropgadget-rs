@@ -1,92 +1,145 @@
 use std::fs;
-use std::thread;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::path::Path;
+use std::thread;
 
-use clap::App;
+use clap::{ArgAction, Parser, ValueEnum};
 use colored::*;
-use log::{
-    Record, Level, Metadata, LevelFilter,
-    debug, info, warn, error,
-};
 use goblin::Object;
+use log::{debug, error, info, warn, Level, LevelFilter, Metadata, Record};
 
 use crate::common::GenericResult;
-use crate::format::{Format, pe, elf, mach};
 use crate::cpu;
-use crate::section::Section;
-use crate::gadget::{get_all_valid_positions_and_length, find_gadgets_from_position, Gadget, InstructionGroup};
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
+use crate::format;
+use crate::format::{elf, mach, pe, Format};
+use crate::gadget::{
+    find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
+};
+use crate::section::Section;
 
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum RopGadgetType {
+    /// Any
+    Any,
+    /// Returns only
+    Returns,
+    /// Calls only
+    Calls,
+    /// Jumps
+    Jumps,
+}
 
-pub enum RopProfileStrategy
-{
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum RopProfileStrategy {
     Fast,
     Complete,
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about)] // Read from `Cargo.toml`
+pub struct Args {
+    /// The file to parse
+    #[arg(value_name = "FILE")]
+    filepath: PathBuf,
 
-pub struct ExecutableDetail
-{
+    /// The number of threads to use
+    #[arg(short, long = "number-of-threads", default_value_t = 2)]
+    thread_num: u8,
+
+    /// Write gadget to file (optional)
+    #[arg(short, long = "output-file", value_name = "OUTPUT")]
+    output_file: Option<PathBuf>,
+
+    /// The verbosity level
+    #[arg(short, long = "verbose", action = clap::ArgAction::Count)]
+    verbosity: u8,
+
+    /// Unique gadgets
+    #[arg(short, long, action = ArgAction::SetTrue)]
+    unique_only: bool,
+
+    /// Force the architecture to given value
+    #[arg(long, value_enum)]
+    architecture: Option<cpu::CpuType>,
+
+    /// Force the OS to given value
+    #[arg(long, value_enum)]
+    format: Option<format::Format>,
+
+    /// Specify an image base
+    #[arg(short, long, default_value_t = 0)]
+    image_base: u32,
+
+    /// Unique gadgets
+    #[arg(long)]
+    no_color: bool,
+
+    /// The maximum number of instructions in a gadget
+    #[arg(long, default_value_t = 6)]
+    max_insn_per_gadget: u8,
+
+    /// The type of gadgets to focus on (default - any)
+    #[arg(long, value_enum, default_value_t = InstructionGroup::Undefined)]
+    rop_type: InstructionGroup,
+
+    /// The profile type (default - fast)
+    #[arg(long, value_enum, default_value_t = RopProfileStrategy::Fast)]
+    profile_type: RopProfileStrategy,
+}
+
+pub struct ExecutableDetail {
     pub format: Option<Format>,
     pub cpu: Option<Box<dyn cpu::Cpu>>,
     pub entry_point_address: u64,
 }
 
-
-impl std::fmt::Display for ExecutableDetail
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
-        let cpu = match &self.cpu
-        {
-            Some(x) => { x.cpu_type().to_string() }
-            None => { "Unknown".to_string() }
+impl std::fmt::Display for ExecutableDetail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cpu = match &self.cpu {
+            Some(x) => x.cpu_type().to_string(),
+            None => "Unknown".to_string(),
         };
 
-        let format = match &self.format
-        {
-            Some(x) => { format!("{}", x) }
-            None => { "Unknown".to_string() }
+        let format = match &self.format {
+            Some(x) => {
+                format!("{}", x)
+            }
+            None => "Unknown".to_string(),
         };
 
-        write!(f, "Info({}, {}, Entry=0x{:x})", cpu, format, self.entry_point_address)
+        write!(
+            f,
+            "Info({}, {}, Entry=0x{:x})",
+            cpu, format, self.entry_point_address
+        )
     }
 }
 
-impl ExecutableDetail
-{
-    pub fn is_64b(&self) -> bool
-    {
-        if let Some(cpu) = &self.cpu
-        {
+impl ExecutableDetail {
+    pub fn is_64b(&self) -> bool {
+        if let Some(cpu) = &self.cpu {
             return cpu.ptrsize() == 8;
         }
         false
     }
 }
 
-
 struct RpLogger;
 
-impl log::Log for RpLogger
-{
-    fn enabled(&self, metadata: &Metadata) -> bool
-    {
+impl log::Log for RpLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
         metadata.level() <= Level::Trace
     }
 
-    fn log(&self, record: &Record)
-    {
-        if self.enabled(record.metadata())
-        {
-            let level = match record.level().to_string().as_str()
-            {
-                "ERROR" => { "ERROR".red() },
-                "WARN" => { "WARN".magenta() },
-                "INFO" => { "INFO".green() },
-                "DEBUG" => { "DEBUG".cyan() },
-                _ => { "TRACE".bold() },
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let level = match record.level().to_string().as_str() {
+                "ERROR" => "ERROR".red(),
+                "WARN" => "WARN".magenta(),
+                "INFO" => "INFO".green(),
+                "DEBUG" => "DEBUG".cyan(),
+                _ => "TRACE".bold(),
             };
 
             println!("[{}] - {}", level, record.args());
@@ -96,20 +149,16 @@ impl log::Log for RpLogger
     fn flush(&self) {}
 }
 
-
 static LOGGER: RpLogger = RpLogger;
 
-
-pub struct Session
-{
+pub struct Session {
     //
     // session required information
     //
-    pub filepath: String,
+    pub filepath: PathBuf,
     pub nb_thread: u32,
     pub verbosity: LevelFilter,
-    pub output_file: Option<String>,
-
+    pub output_file: Option<PathBuf>,
 
     //
     // misc details about the executable file (filled by )
@@ -129,287 +178,111 @@ pub struct Session
     pub profile_type: RopProfileStrategy,
 }
 
-
-
-impl Session
-{
+impl Session {
     //
     // Build session parameters
     //
-    pub fn new(args: App) -> Option<Self>
-    {
-        let matches = args.get_matches();
+    pub fn new() -> Option<Self> {
+        let args = Args::parse();
 
-        let verbosity = match matches.values_of("verbosity")
-        {
-            Some(_x) =>
-            {
-                let cnt = matches.occurrences_of("verbosity");
-                match cnt
-                {
-                    4 => { LevelFilter::Trace } // -vvvv
-                    3 => { LevelFilter::Debug } // -vvv
-                    2 => { LevelFilter::Info }  // -vv
-                    1 => { LevelFilter::Warn }  // -v
-                    _ => { LevelFilter::Error }
-                }
-            },
-            None => { LevelFilter::Error }
+        let verbosity = match args.verbosity {
+            4 => LevelFilter::Trace, // -vvvv
+            3 => LevelFilter::Debug, // -vvv
+            2 => LevelFilter::Info,  // -vv
+            1 => LevelFilter::Warn,  // -v
+            _ => LevelFilter::Error,
         };
 
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(verbosity))
             .unwrap();
 
-
-        let filepath = match matches.value_of("file")
-        {
-            Some(x) =>
-            {
-                let p = std::path::Path::new(x);
-                if p.exists() && p.is_file()
-                {
-                    x.to_ascii_lowercase()
-                }
-                else
-                {
-                    error!("'{}' is invalid (doesn't exist or is not readable)", x.bold().green());
-                    return None;
-                }
+        let cpu: Option<Box<dyn cpu::Cpu>> = match args.architecture {
+            Some(x) => match x {
+                cpu::CpuType::X86 => Some(Box::new(cpu::x86::X86 {})),
+                cpu::CpuType::X64 => Some(Box::new(cpu::x64::X64 {})),
+                cpu::CpuType::ARM64 => Some(Box::new(cpu::arm::ARM64 {})),
+                cpu::CpuType::ARM => Some(Box::new(cpu::arm::ARM {})),
             },
-            None =>
-            {
-                panic!("FILE argument is required")
-            }
+            None => None,
         };
 
-        let nb_thread = match matches.value_of("thread_num")
-        {
-            Some(x) => { x.parse::<u32>().unwrap() }
-            None => { 2 }
-        };
-
-
-
-
-        let output_file = match matches.value_of("output_file")
-        {
-            Some(x) => { Some(x.to_string()) }
-            None => { None }
-        };
-
-        //
-        // if the --os option is given, the user tries to force the format
-        //
-        let format = match matches.value_of("os")
-        {
-            Some(x) =>
-            {
-                match x
-                {
-                    "win" => { Some(Format::Pe) }
-                    "lin" => { Some(Format::Elf) }
-                    "osx" => { Some(Format::Mach) }
-                    "raw" => { todo!("soon") }
-                    _ => { unimplemented!("unknown {}", x) }
-                }
-            }
-            None => { None }
-        };
-
-        //
-        // if the --arch option is given, the user tries to force the format
-        //
-        let cpu: Option<Box<dyn cpu::Cpu>> = match matches.value_of("arch")
-        {
-            Some(x) =>
-            {
-                match x
-                {
-                    "x86" => { Some(Box::new(cpu::x86::X86{})) }
-                    "x64" => { Some(Box::new(cpu::x64::X64{})) }
-                    "arm" => { todo!("soon") }
-                    "arm64" => { todo!("soon") }
-                    _ => { unimplemented!("unknown {}", x) }
-                }
-            }
-            None => { None }
-        };
-
-
-
-        let entry_point_address : u64 = match matches.value_of("image_base")
-        {
-            Some(x) =>
-            {
-                //
-                // if specified by flag --imagebase
-                //
-                x.parse::<u64>().unwrap_or(0)
-            }
-            None =>
-            {
-                //
-                // default value
-                //
-                match &cpu
-                {
-                    Some(x) =>
-                    {
-                        match x.ptrsize()
-                        {
-                            4 => { 0x00000000 }
-                            8 => { 0x0000000000000000 }
-                            _ => { 0x00000000 }
-                        }
-                    }
-                    None => { 0x00000000 }
-                }
-            }
-        };
-
-
-        let unique_only = matches.is_present("unique");
-
-        let mut use_color = !matches.is_present("no_color");
-
-        //
-        // if the output is redirected to a file, disregard the colorize setting anyway
-        //
-        match output_file
-        {
-            Some(_) => { use_color = false; }
-            _ => { }
-        }
-
-        let max_gadget_length = match matches.value_of("max_gadget_length")
-        {
-            Some(x) => { x.parse::<usize>().unwrap() }
-            None => { 16 }
-        };
-
-        let gadget_type = match  matches.value_of("rop_type")
-        {
-            Some(x) =>
-            {
-                match x
-                {
-                    "ret" => { InstructionGroup::Ret }
-                    "call" => { InstructionGroup::Call }
-                    "all" => { InstructionGroup::Undefined }
-                    _ =>
-                    {
-                        warn!("Invalid gadget search type, using default...");
-                        InstructionGroup::Undefined
-                    }
-                }
-            }
-            None => { InstructionGroup::Undefined }
-        };
-
-        let profile_type = match  matches.value_of("profile_type")
-        {
-            Some(x) =>
-            {
-                match x
-                {
-                    "complete" => { RopProfileStrategy::Complete }
-                    "fast" => { RopProfileStrategy::Fast }
-                    _ =>
-                    {
-                        warn!("Invalid profile, using default...");
-                        RopProfileStrategy::Fast
-                    }
-                }
-            }
-            None => { RopProfileStrategy::Fast }
-        };
-
-        Some(
-            Session
-            {
-                filepath,
-                nb_thread,
-                verbosity,
-                output_file,
-                info: ExecutableDetail
-                {
-                    format,
-                    entry_point_address,
-                    cpu,
-                },
-                sections: None,
-                gadgets: Mutex::new(Vec::new()),
-                unique_only,
-                use_color,
-                max_gadget_length,
-                gadget_type,
-                profile_type,
-                engine_type: DisassemblyEngineType::Capstone,
-            }
-        )
+        Some(Session {
+            filepath: args.filepath,
+            nb_thread: args.thread_num.into(),
+            output_file: args.output_file,
+            unique_only: args.unique_only,
+            use_color: !args.no_color,
+            max_gadget_length: args.max_insn_per_gadget.into(),
+            gadget_type: args.rop_type,
+            profile_type: args.profile_type,
+            verbosity: verbosity,
+            info: ExecutableDetail {
+                format: args.format,
+                entry_point_address: args.image_base.into(),
+                cpu: cpu,
+            },
+            sections: None,
+            gadgets: Mutex::new(Vec::new()),
+            engine_type: DisassemblyEngineType::Capstone,
+        })
     }
-
 
     ///
     /// Parse the given binary file
     ///
-    fn collect_executable_section(&mut self) -> bool
-    {
-        let input = &self.filepath;
-        let path = Path::new(input);
-        let buffer = fs::read(path).unwrap();
+    fn collect_executable_section(&mut self) -> bool {
+        if !self.filepath.as_path().exists() {
+            return false;
+        }
 
-        let sections = match Object::parse(&buffer).unwrap()
-        {
-            Object::PE(pe) =>
-            {
-                Some( pe::prepare_pe_file(self, &pe).unwrap() )
-            },
+        let buffer = match fs::read(self.filepath.as_path()) {
+            Ok(buf) => buf,
+            Err(_) => panic!("failed to read {}", self.filepath.to_str().unwrap()),
+        };
 
-            Object::Elf(elf) =>
-            {
-                Some( elf::prepare_elf_file( self, &elf).unwrap())
-            },
+        let sections = match Object::parse(&buffer).unwrap() {
+            Object::PE(pe) => Some(pe::prepare_pe_file(self, &pe).unwrap()),
 
-            Object::Mach(mach) =>
-            {
-                Some(mach::prepare_mach_file(self, &mach).unwrap())
-            }
+            Object::Elf(elf) => Some(elf::prepare_elf_file(self, &elf).unwrap()),
 
-            Object::Archive(_) =>
-            {
+            Object::Mach(mach) => Some(mach::prepare_mach_file(self, &mach).unwrap()),
+
+            Object::Archive(_) => {
                 error!("Unsupported type");
                 None
-            },
+            }
 
-            Object::Unknown(magic) =>
-            {
-                //todo:
+            Object::Unknown(magic) => {
+                //TODO:
                 //Some(mach::prepare_raw_file(self).unwrap())
                 error!("unknown magic {}", magic);
                 None
-            },
+            }
         };
 
-        match sections
-        {
-            Some(_) => {self.sections = sections; true}
-            None => {false}
+        match sections {
+            Some(_) => {
+                self.sections = sections;
+                true
+            }
+            None => false,
         }
     }
-
 
     ///
     /// Parse the given binary file
     ///
-    fn parse_binary_file(&mut self) -> bool
-    {
-        info!("Checking file '{}'...", self.filepath.green().bold());
+    fn parse_binary_file(&mut self) -> bool {
+        let filename = self.filepath.to_str().unwrap();
 
-        debug!("Collecting executable sections from file '{}'...", self.filepath.green().bold());
-        if !self.collect_executable_section()
-        {
+        info!("Checking file '{}'...", filename.green().bold());
+
+        debug!(
+            "Collecting executable sections from file '{}'...",
+            filename.green().bold()
+        );
+        if !self.collect_executable_section() {
             return false;
         }
 
@@ -420,46 +293,38 @@ impl Session
         true
     }
 
-
     ///
     /// Checks if the session is valid
     ///
-    pub fn is_valid_session(&mut self) -> bool
-    {
+    pub fn is_valid_session(&mut self) -> bool {
         info!("Checking session paramters...");
 
         self.parse_binary_file() && !self.sections.is_none()
     }
-
 }
 
 //
 // find all the gadgets in the different sections in parallel
 // returns true if no error occured
 //
-pub fn find_gadgets(session: Arc<Session>) -> bool
-{
-    if session.sections.is_none()
-    {
+pub fn find_gadgets(session: Arc<Session>) -> bool {
+    if session.sections.is_none() {
         return false;
     }
 
-    let mut total_gadgets : usize = 0;
+    let mut total_gadgets: usize = 0;
     let number_of_sections = session.sections.as_deref().unwrap().len();
     let nb_thread = session.nb_thread;
-
 
     //
     // multithread parsing of the sections (1 thread/section)
     //
-    let mut i : usize = 0;
+    let mut i: usize = 0;
 
-    while i < number_of_sections
-    {
-        let mut threads : Vec<std::thread::JoinHandle<Vec<Gadget>>> = Vec::new();
+    while i < number_of_sections {
+        let mut threads: Vec<std::thread::JoinHandle<Vec<Gadget>>> = Vec::new();
 
-        for n in 0..nb_thread
-        {
+        for n in 0..nb_thread {
             debug!("spawning thread 'thread-{}'...", n);
             let c = session.clone();
             let thread = thread::spawn(move || thread_worker(c, i));
@@ -467,8 +332,7 @@ pub fn find_gadgets(session: Arc<Session>) -> bool
             i += 1;
         }
 
-        for t in threads
-        {
+        for t in threads {
             debug!("joining {:?}...", t.thread().id());
             let gadgets = t.join().unwrap();
             let cnt = gadgets.len().clone();
@@ -480,19 +344,15 @@ pub fn find_gadgets(session: Arc<Session>) -> bool
         }
     }
 
-    debug!("Total gadgets found => {}", total_gadgets);
+    info!("Total gadgets found => {}", total_gadgets);
     true
 }
 
-
-impl std::fmt::Debug for Session
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
-        let cpu = match &self.info.cpu
-        {
-            Some(x) => { x.cpu_type().to_string() }
-            None => { "Unknown".to_string() }
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cpu = match &self.info.cpu {
+            Some(x) => x.cpu_type().to_string(),
+            None => "Unknown".to_string(),
         };
 
         f.debug_struct("Session")
@@ -503,78 +363,84 @@ impl std::fmt::Debug for Session
     }
 }
 
-
-impl std::fmt::Display for Session
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
+impl std::fmt::Display for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Session(file={}, {})",
-            self.filepath,
+            self.filepath.to_str().unwrap_or("<NoFile>"),
             self.info
         )
     }
 }
 
-
-
-fn thread_worker(session: Arc<Session>, index: usize) -> Vec<Gadget>
-{
-    if session.info.cpu.is_none()
-    {
+fn thread_worker(session: Arc<Session>, index: usize) -> Vec<Gadget> {
+    if session.info.cpu.is_none() {
         panic!();
     }
 
     let cpu = session.info.cpu.as_ref().unwrap();
     let engine = DisassemblyEngine::new(&session.engine_type, cpu);
-    debug!("[{:?}] Initialized engine {} for {:?}", thread::current().id(), engine, cpu.cpu_type());
+    debug!(
+        "[{:?}] Initialized engine {} for {:?}",
+        thread::current().id(),
+        engine,
+        cpu.cpu_type()
+    );
     process_section(session, index, &engine).unwrap()
 }
 
-
-fn process_section(session: Arc<Session>, index: usize, engine: &DisassemblyEngine) -> GenericResult<Vec<Gadget>>
-{
+fn process_section(
+    session: Arc<Session>,
+    index: usize,
+    engine: &DisassemblyEngine,
+) -> GenericResult<Vec<Gadget>> {
     let mut gadgets: Vec<Gadget> = Vec::new();
 
-    if let Some(sections) = &session.sections
-    {
-        if let Some(section) = sections.get(index)
-        {
-            debug!("{:?} is processing section '{}'", thread::current().id(), section.name);
+    if let Some(sections) = &session.sections {
+        if let Some(section) = sections.get(index) {
+            debug!(
+                "{:?} is processing section '{}'",
+                thread::current().id(),
+                section.name
+            );
 
             let cpu = &session.info.cpu.as_ref().unwrap();
 
-            for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)?
-            {
-                debug!("processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ", section.name, section.start_address, section.size, pos, len);
-
-                let res = find_gadgets_from_position(
-                    engine,
-                    section,
-                    pos,
-                    len,
-                    cpu
+            for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)? {
+                debug!(
+                    "processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ",
+                    section.name, section.start_address, section.size, pos, len
                 );
 
-                if res.is_ok()
-                {
+                let res = find_gadgets_from_position(engine, section, pos, len, cpu);
+
+                if res.is_ok() {
                     let mut g = res?;
                     debug!("new {:?}", g);
                     gadgets.append(&mut g);
                 }
             }
 
-            debug!("{:?} finished processing section '{}'", thread::current().id(), section.name);
+            debug!(
+                "{:?} finished processing section '{}'",
+                thread::current().id(),
+                section.name
+            );
+        } else {
+            warn!(
+                "No section at index {} for {:?}, ending thread...",
+                index,
+                thread::current().id()
+            );
         }
-        else
-        {
-            warn!("No section at index {} for {:?}, ending thread...", index, thread::current().id());
-        }
-    }
-    else
-    {
-        panic!("{:?}: critical fail of process_section({:?}, {})", thread::current().id(), session, index);
+    } else {
+        panic!(
+            "{:?}: critical fail of process_section({:?}, {})",
+            thread::current().id(),
+            session,
+            index
+        );
     }
 
     Ok(gadgets)
