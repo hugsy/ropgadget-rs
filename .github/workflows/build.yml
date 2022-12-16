@@ -17,20 +17,20 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { os: ubuntu-20.04, target: arm-unknown-linux-gnueabihf , use-cross: true }
-          - { os: ubuntu-20.04, target: arm-unknown-linux-musleabihf, use-cross: true }
-          - { os: ubuntu-20.04, target: aarch64-unknown-linux-gnu   , use-cross: true }
-          - { os: ubuntu-20.04, target: i686-unknown-linux-gnu      , use-cross: true }
-          - { os: ubuntu-20.04, target: i686-unknown-linux-musl     , use-cross: true }
-          - { os: ubuntu-20.04, target: x86_64-unknown-linux-gnu    , use-cross: true }
-          - { os: ubuntu-20.04, target: x86_64-unknown-linux-musl   , use-cross: true }
-          - { os: macos-12    , target: x86_64-apple-darwin         , use-cross: false}
-          - { os: windows-2019, target: aarch64-pc-windows-msvc     , use-cross: false}
-          - { os: windows-2019, target: i686-pc-windows-msvc        , use-cross: false}
-          - { os: windows-2019, target: x86_64-pc-windows-gnu       , use-cross: false}
-          - { os: windows-2019, target: x86_64-pc-windows-msvc      , use-cross: false}
+          - { os: ubuntu-latest,  target: arm-unknown-linux-gnueabihf , use-cross: true }
+          - { os: ubuntu-latest,  target: arm-unknown-linux-musleabihf, use-cross: true }
+          - { os: ubuntu-latest,  target: aarch64-unknown-linux-gnu   , use-cross: true }
+          - { os: ubuntu-latest,  target: i686-unknown-linux-gnu      , use-cross: true }
+          - { os: ubuntu-latest,  target: i686-unknown-linux-musl     , use-cross: true }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu    , use-cross: true }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl   , use-cross: true }
+          - { os: macos-latest,   target: x86_64-apple-darwin         , use-cross: false}
+          - { os: windows-latest, target: aarch64-pc-windows-msvc     , use-cross: false}
+          - { os: windows-latest, target: i686-pc-windows-msvc        , use-cross: false}
+          - { os: windows-latest, target: x86_64-pc-windows-gnu       , use-cross: false}
+          - { os: windows-latest, target: x86_64-pc-windows-msvc      , use-cross: false}
 
-    name: ${{ matrix.job.os }} / ${{ matrix.job.target }}"
+    name: "${{ matrix.job.os }} / ${{ matrix.job.target }}"
     runs-on: ${{ matrix.job.os }}
 
     steps:
@@ -79,10 +79,9 @@ jobs:
         run: |
           mkdir build
           cargo install --path . --root build
-          cp -v target/release/rp-rs* build/
 
       - name: Publish artifact
         uses: actions/upload-artifact@v2
         with:
           name: ${{ env.PROJECT_NAME}}_${{ matrix.job.os}}_${{ matrix.job.target}}_${{ env.GITHUB_REF_SLUG }}_${{ env.GITHUB_SHA_SHORT }}
-          path: build/
+          path: build/bin
