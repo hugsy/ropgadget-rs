@@ -48,7 +48,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --verbose --color always --target ${{ matrix.target }}
 
       - name: Prepare artifact
         shell: bash
