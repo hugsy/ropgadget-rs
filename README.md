@@ -1,6 +1,6 @@
 # ropgadget-rs
 
-[![Github Actions CI](https://github.com/hugsy/rp-rs/workflows/Github%20Actions%20CI/badge.svg)](https://github.com/hugsy/rp-rs/actions)
+[![CI Build](https://github.com/hugsy/rp-rs/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/hugsy/rp-rs/actions/workflows/build.yml)
 
 ## Why another ROP gadget finder?
 
@@ -15,7 +15,7 @@ Currently support ELF/PE/Mach formats, and x86/x64/arm/arm64 architectures.
 
 ```bash
 PS C:\Users\hugsy❯ .\rp-rs.exe --help
-rp-rs 0.1
+rp-rs 0.3
 hugsy
 Another (bad) ROP gadget finder
 
