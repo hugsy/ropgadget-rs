@@ -39,15 +39,14 @@ jobs:
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-            profile: minimal
             toolchain: nightly
-            components: rustfmt, clippy
             override: true
             target: ${{ matrix.target }}
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
+          use-cross: true
           command: build
           args: --release --target ${{ matrix.target }}
 
