@@ -16,17 +16,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest']
-        target:
-        - i686-unknown-linux-gnu
-        - x86_64-unknown-linux-gnu
-        - aarch64-unknown-linux-gnu
-        - i686-pc-windows-msvc
-        - x86_64-pc-windows-msvc
-        - x86_64-apple-darwin
+        job:
+          - { os: ubuntu-20.04, target: arm-unknown-linux-gnueabihf , use-cross: true }
+          - { os: ubuntu-20.04, target: arm-unknown-linux-musleabihf, use-cross: true }
+          - { os: ubuntu-20.04, target: aarch64-unknown-linux-gnu   , use-cross: true }
+          - { os: ubuntu-20.04, target: i686-unknown-linux-gnu      , use-cross: true }
+          - { os: ubuntu-20.04, target: i686-unknown-linux-musl     , use-cross: true }
+          - { os: ubuntu-20.04, target: x86_64-unknown-linux-gnu    , use-cross: true }
+          - { os: ubuntu-20.04, target: x86_64-unknown-linux-musl   , use-cross: true }
+          - { os: macos-12    , target: x86_64-apple-darwin         , use-cross: false}
+          - { os: windows-2019, target: aarch64-pc-windows-msvc     , use-cross: false}
+          - { os: windows-2019, target: i686-pc-windows-msvc        , use-cross: false}
+          - { os: windows-2019, target: x86_64-pc-windows-gnu       , use-cross: false}
+          - { os: windows-2019, target: x86_64-pc-windows-msvc      , use-cross: false}
 
-    name: "build_${{ matrix.target }}"
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.job.os }} / ${{ matrix.job.target }}"
+    runs-on: ${{ matrix.job.os }}
 
     steps:
       - name: Checkout
@@ -37,19 +42,37 @@ jobs:
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v4
 
+      - name: Install prerequisites
+        shell: bash
+        run: |
+          case ${{ matrix.job.target }} in
+            arm-unknown-linux-*) sudo apt-get -y update ; sudo apt-get -y install gcc-arm-linux-gnueabihf ;;
+            aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
+          esac
+
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly
             override: true
-            target: ${{ matrix.target }}
+            target: ${{ matrix.job.target }}
+
+      - name: Show version information (Rust, cargo, GCC)
+        shell: bash
+        run: |
+          gcc --version || true
+          rustup -V
+          rustup toolchain list
+          rustup default
+          cargo -V
+          rustc -V
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.job.use-cross }}
           command: build
-          args: --release --verbose --target ${{ matrix.target }}
+          args: --release --verbose --target ${{ matrix.job.target }}
 
       - name: Prepare artifact
         shell: bash
@@ -60,5 +83,5 @@ jobs:
       - name: Publish artifact
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ env.PROJECT_NAME}}_${{ matrix.target}}_${{ env.GITHUB_REF_SLUG }}_${{ env.GITHUB_SHA_SHORT }}
+          name: ${{ env.PROJECT_NAME}}_${{ matrix.job.os}}_${{ matrix.job.target}}_${{ env.GITHUB_REF_SLUG }}_${{ env.GITHUB_SHA_SHORT }}
           path: build/
