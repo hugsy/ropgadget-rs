@@ -19,6 +19,7 @@ jobs:
         os: ['ubuntu-latest']
         target:
         - i686-unknown-linux-gnu
+        - x86_64-unknown-linux-gnu
         - aarch64-unknown-linux-gnu
         - i686-pc-windows-msvc
         - x86_64-pc-windows-msvc
@@ -48,7 +49,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --verbose --color always --target ${{ matrix.target }}
+          args: --release --verbose --target ${{ matrix.target }}
 
       - name: Prepare artifact
         shell: bash
