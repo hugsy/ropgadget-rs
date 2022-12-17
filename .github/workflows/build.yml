@@ -63,11 +63,16 @@ jobs:
           cargo -V
           rustc -V
 
-      - name: Install cross
+      - name: Use cross
         if: ${{ matrix.job.use-cross == true }}
         run: |
           cargo install cross
           echo "CARGO_CMD=cross" >> $GITHUB_ENV
+
+      - name: Use cargo
+        if: ${{ matrix.job.use-cross == false }}
+        run: |
+          echo "CARGO_CMD=cargo" >> $GITHUB_ENV
 
       - name: Build
         run: ${{ env.CARGO_CMD }} build --locked --release --target=${{ matrix.job.target }}
