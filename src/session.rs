@@ -200,7 +200,7 @@ impl Session {
         let cpu: Option<Box<dyn cpu::Cpu>> = match args.architecture {
             Some(x) => match x {
                 cpu::CpuType::X86 => Some(Box::new(cpu::x86::X86 {})),
-                cpu::CpuType::X64 => Some(Box::new(cpu::x64::X64 {})),
+                cpu::CpuType::X64 => Some(Box::new(cpu::x86::X64 {})),
                 cpu::CpuType::ARM64 => Some(Box::new(cpu::arm::ARM64 {})),
                 cpu::CpuType::ARM => Some(Box::new(cpu::arm::ARM {})),
             },
