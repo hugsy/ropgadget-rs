@@ -6,7 +6,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use crate::{common::GenericResult, error::Error};
-use crate::{cpu::arm::ARM, cpu::arm::ARM64, cpu::x64::X64, cpu::x86::X86};
+use crate::{cpu::arm::ARM, cpu::arm::ARM64, cpu::x86::X64, cpu::x86::X86};
 use crate::{format::Format, section::Permission, section::Section, session::Session};
 
 pub fn prepare_elf_file(session: &mut Session, elf: &Elf) -> GenericResult<Vec<Section>> {

@@ -18,16 +18,12 @@ jobs:
       matrix:
         job:
           - { os: ubuntu-latest,  target: arm-unknown-linux-gnueabihf , use-cross: true }
-          - { os: ubuntu-latest,  target: arm-unknown-linux-musleabihf, use-cross: true }
           - { os: ubuntu-latest,  target: aarch64-unknown-linux-gnu   , use-cross: true }
           - { os: ubuntu-latest,  target: i686-unknown-linux-gnu      , use-cross: true }
-          - { os: ubuntu-latest,  target: i686-unknown-linux-musl     , use-cross: true }
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu    , use-cross: true }
-          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl   , use-cross: true }
           - { os: macos-latest,   target: x86_64-apple-darwin         , use-cross: false}
           - { os: windows-latest, target: aarch64-pc-windows-msvc     , use-cross: false}
           - { os: windows-latest, target: i686-pc-windows-msvc        , use-cross: false}
-          - { os: windows-latest, target: x86_64-pc-windows-gnu       , use-cross: false}
           - { os: windows-latest, target: x86_64-pc-windows-msvc      , use-cross: false}
 
     name: "${{ matrix.job.os }} / ${{ matrix.job.target }}"
@@ -103,7 +99,7 @@ jobs:
         nodetail: true
         title: 🚧 Build `${{ env.GITHUB_SHA_SHORT }}` for `${{ env.REPO }}` 🚧
         description: |
-          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ env.GITHUB_SHA_SHORT }}` initiated by ${{ env.AUTHOR_URL }}:
+          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ env.GITHUB_SHA_SHORT }}` initiated by [${{ github.actor }}](${{ env.AUTHOR_URL }}):
           ● Commit [${{ env.GITHUB_SHA_SHORT }}](${{ env.COMMIT_URL }})
           ● Branch [`${{ env.GITHUB_REF_SLUG }}`](${{ env.BRANCH_URL }})
           ● [Detail Page](${{ env.RUN_URL }})

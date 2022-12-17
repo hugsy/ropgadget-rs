@@ -7,7 +7,7 @@ use goblin::mach::{constants, Mach, MachO};
 use log::debug;
 
 use crate::{
-    common::GenericResult, cpu::arm::ARM, cpu::arm::ARM64, cpu::x64::X64, cpu::x86::X86,
+    common::GenericResult, cpu::arm::ARM, cpu::arm::ARM64, cpu::x86::X64, cpu::x86::X86,
     error::Error, format::Format, section::Permission, section::Section, session::Session,
 };
 

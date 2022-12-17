@@ -22,7 +22,7 @@ impl std::fmt::Display for Format {
             Format::Mach => "Mach",
         };
 
-        write!(f, "OS={}", val)
+        write!(f, "BinaryFormat={}", val)
     }
 }
 
@@ -31,7 +31,7 @@ pub trait ExecutableFormat {
 
     fn collect_executable_sections(
         &self,
-        path: &str,
+        path: &std::path::PathBuf,
         exec: &Self::Fmt,
     ) -> GenericResult<Vec<Section>>;
 }

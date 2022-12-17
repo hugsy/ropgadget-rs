@@ -1,5 +1,4 @@
 pub mod arm;
-pub mod x64;
 pub mod x86;
 
 use clap::ValueEnum;
