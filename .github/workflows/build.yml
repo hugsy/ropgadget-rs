@@ -64,6 +64,7 @@ jobs:
           rustc -V
 
       - name: Build
+        if: ${{ matrix.job.os != 'windows-latest' }}
         run: |
           case ${{ matrix.job.use-cross }} in
             true) cargo install cross; cross build --locked --release --target=${{ matrix.job.target }} ;;
