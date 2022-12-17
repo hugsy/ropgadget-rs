@@ -66,7 +66,7 @@ jobs:
       - name: Build
         run: |
           case ${{ matrix.job.use-cross }} in
-            true) cross build --locked --release --target=${{ matrix.job.target }} ;;
+            true) cargo install cross; cross build --locked --release --target=${{ matrix.job.target }} ;;
             false) cargo build --locked --release --target=${{ matrix.job.target }} ;;
             *) echo "Unknown ${{ matrix.job.use-cross }}"; exit 1 ;;
           esac
