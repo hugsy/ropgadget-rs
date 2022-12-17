@@ -63,12 +63,14 @@ jobs:
           cargo -V
           rustc -V
 
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.job.use-cross }}
-          command: build
-          args: --release --verbose --target ${{ matrix.job.target }}
+      - name: Install cross
+        if: ${{ matrix.job.use-cross == true }}
+        run: |
+          cargo install cross
+          echo "CARGO_CMD=cross" >> $GITHUB_ENV
+
+      - name: Build
+        run: ${{ env.CARGO_CMD }} build --locked --release --target=${{ matrix.job.target }}
 
       - name: Prepare artifact
         shell: bash
