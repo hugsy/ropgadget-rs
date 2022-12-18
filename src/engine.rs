@@ -31,7 +31,7 @@ impl DisassemblyEngine {
     ///
     ///
     ///
-    pub fn new(engine_type: &DisassemblyEngineType, cpu: &Box<dyn Cpu>) -> Self {
+    pub fn new(engine_type: &DisassemblyEngineType, cpu: &dyn Cpu) -> Self {
         match engine_type {
             DisassemblyEngineType::Capstone => Self {
                 engine_type: DisassemblyEngineType::Capstone,
@@ -95,8 +95,8 @@ impl std::fmt::Display for CapstoneDisassembler {
 }
 
 impl CapstoneDisassembler {
-    //fn new(cpu: &dyn Cpu) -> Self
-    fn new(cpu: &Box<dyn Cpu>) -> Self {
+    fn new(cpu: &dyn Cpu) -> Self {
+        // fn new(cpu: &Box<dyn Cpu>) -> Self {
         let cs = match cpu.cpu_type() {
             CpuType::X86 => Capstone::new()
                 .x86()

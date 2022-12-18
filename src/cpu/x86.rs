@@ -7,10 +7,6 @@ impl cpu::Cpu for X86 {
         cpu::CpuType::X86
     }
 
-    fn name(&self) -> &str {
-        "x86"
-    }
-
     fn ptrsize(&self) -> usize {
         4
     }
@@ -35,15 +31,17 @@ impl cpu::Cpu for X86 {
     }
 }
 
+impl std::fmt::Debug for X86 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("X86").finish()
+    }
+}
+
 pub struct X64;
 
 impl cpu::Cpu for X64 {
     fn cpu_type(&self) -> cpu::CpuType {
         cpu::CpuType::X64
-    }
-
-    fn name(&self) -> &str {
-        "x86-64"
     }
 
     fn ptrsize(&self) -> usize {
@@ -70,5 +68,11 @@ impl cpu::Cpu for X64 {
 
     fn insn_step(&self) -> usize {
         1
+    }
+}
+
+impl std::fmt::Debug for X64 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("X64").finish()
     }
 }

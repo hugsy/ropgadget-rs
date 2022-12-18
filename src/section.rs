@@ -1,6 +1,5 @@
 use std::fmt;
 
-
 bitflags! {
     pub struct Permission: u8
     {
@@ -12,10 +11,8 @@ bitflags! {
     }
 }
 
-
 #[derive(Debug)]
-pub struct Section
-{
+pub struct Section {
     pub start_address: u64,
     pub end_address: u64,
     pub name: String,
@@ -24,28 +21,19 @@ pub struct Section
     pub data: Vec<u8>,
 }
 
-
-impl fmt::Display for Section
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {
+impl fmt::Display for Section {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Section(name='{}', start={:#x}, sz={:#x}, permission={:?})",
-            self.name,
-            self.start_address,
-            self.size,
-            self.permission
+            self.name, self.start_address, self.size, self.permission
         )
     }
 }
 
-
-impl Section
-{
-    pub fn new(start_address: u64, end_address: u64) -> Self
-    {
-        assert!( start_address < end_address );
+impl Section {
+    pub fn new(start_address: u64, end_address: u64) -> Self {
+        assert!(start_address < end_address);
         let sz = (end_address - start_address) as usize;
         Self {
             start_address: start_address,
@@ -53,8 +41,7 @@ impl Section
             size: sz,
             name: String::from(""),
             permission: Permission::NONE,
-            data: vec![0; sz]
+            data: vec![0; sz],
         }
     }
 }
-

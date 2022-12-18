@@ -175,7 +175,6 @@ pub fn get_all_valid_positions_and_length(
                 .windows(sz)
                 .enumerate()
                 .filter(|(_, y)| y[0] == *call.first().unwrap())
-                //.filter(|(_, y)| ret.eq(y) )
                 .map(|(x, _)| (x, sz))
                 .collect();
 
