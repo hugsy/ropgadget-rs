@@ -12,13 +12,17 @@ impl cpu::Cpu for Arm {
         // TODO: thumb
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc0, 0x03, 0x5f, 0xd6], // RET
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
         vec![]
     }
 
@@ -44,13 +48,17 @@ impl cpu::Cpu for Arm64 {
         8
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc0, 0x03, 0x5f, 0xd6], // RET
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
         vec![]
     }
 

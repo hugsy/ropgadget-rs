@@ -78,7 +78,7 @@ pub struct Args {
     max_insn_per_gadget: u8,
 
     /// The type of gadgets to focus on (default - any)
-    #[arg(long, value_enum, default_value_t = InstructionGroup::Undefined)]
+    #[arg(long, value_enum, default_value_t = InstructionGroup::Any)]
     rop_type: InstructionGroup,
 
     /// The profile type (default - fast)

@@ -21,7 +21,7 @@ use clap::ValueEnum;
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum InstructionGroup {
-    Undefined,
+    Any,
     Jump,
     Call,
     Ret,
@@ -132,64 +132,64 @@ impl Gadget {
     }
 }
 
+fn collect_previous_instructions(
+    session: &Arc<Session>,
+    group: &Vec<Vec<u8>>,
+    memory_chunk: &Vec<u8>,
+) -> GenericResult<Vec<(usize, usize)>> {
+    let mut res: Vec<(usize, usize)> = Vec::new();
+    for ret in group {
+        let sz = ret.len();
+        let mut v: Vec<(usize, usize)> = memory_chunk
+            .windows(sz)
+            .enumerate()
+            .filter(|(_, y)| y[0] == *ret.first().unwrap())
+            .map(|(x, _)| (x, sz))
+            .collect();
+
+        res.append(&mut v);
+
+        match session.profile_type {
+            RopProfileStrategy::Fast => {
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(res)
+}
+
 pub fn get_all_valid_positions_and_length(
     session: &Arc<Session>,
     cpu: &Box<dyn cpu::Cpu>,
     section: &Section,
 ) -> GenericResult<Vec<(usize, usize)>> {
     let data = &section.data;
-    let mut res: Vec<(usize, usize)> = Vec::new();
 
-    if session.gadget_type == InstructionGroup::Ret
-        || session.gadget_type == InstructionGroup::Undefined
-    {
-        debug!("inserting ret positions and length...");
-        for ret in cpu.ret_insn() {
-            let sz = ret.len();
-            let mut v: Vec<(usize, usize)> = data
-                .windows(sz)
-                .enumerate()
-                .filter(|(_, y)| y[0] == *ret.first().unwrap())
-                //.filter(|(_, y)| ret.eq(y) )
-                .map(|(x, _)| (x, sz))
-                .collect();
-
-            res.append(&mut v);
-
-            match session.profile_type {
-                RopProfileStrategy::Fast => {
-                    break;
-                }
-                _ => {}
-            }
+    match session.gadget_type {
+        InstructionGroup::Ret => {
+            debug!("inserting ret positions and length...");
+            collect_previous_instructions(session, &cpu.ret_insns(), data)
+        }
+        InstructionGroup::Call => {
+            debug!("inserting call positions and length...");
+            collect_previous_instructions(session, &cpu.call_insns(), data)
+        }
+        InstructionGroup::Jump => {
+            debug!("inserting jump positions and length...");
+            collect_previous_instructions(session, &cpu.jmp_insns(), data)
+        }
+        InstructionGroup::Int => todo!(),
+        InstructionGroup::Iret => todo!(),
+        InstructionGroup::Privileged => todo!(),
+        InstructionGroup::Any => {
+            let mut all = cpu.ret_insns().clone();
+            all.append(&mut cpu.call_insns().clone());
+            all.append(&mut cpu.jmp_insns().clone());
+            collect_previous_instructions(session, &all, data)
         }
     }
-
-    if session.gadget_type == InstructionGroup::Call
-        || session.gadget_type == InstructionGroup::Undefined
-    {
-        debug!("inserting calls positions and length...");
-        for call in cpu.branch_insn() {
-            let sz = call.len();
-            let mut v: Vec<(usize, usize)> = data
-                .windows(sz)
-                .enumerate()
-                .filter(|(_, y)| y[0] == *call.first().unwrap())
-                .map(|(x, _)| (x, sz))
-                .collect();
-
-            res.append(&mut v);
-
-            match session.profile_type {
-                RopProfileStrategy::Fast => {
-                    break;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    Ok(res)
 }
 
 ///

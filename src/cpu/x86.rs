@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::cpu;
 
 pub struct X86;
@@ -11,7 +13,7 @@ impl cpu::Cpu for X86 {
         4
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc3], // ret
             vec![0xc2], // ret imm
@@ -20,10 +22,14 @@ impl cpu::Cpu for X86 {
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xff], // call/jmp
         ]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
     }
 
     fn insn_step(&self) -> usize {
@@ -48,7 +54,7 @@ impl cpu::Cpu for X64 {
         8
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc3],             // ret
             vec![0xcb],             // retf
@@ -57,13 +63,17 @@ impl cpu::Cpu for X64 {
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xff, 0x00],
             vec![0xe8, 0x00, 0x00, 0x00, 0x00],
             vec![0xe9, 0x00, 0x00, 0x00, 0x00],
             vec![0xff, 0x00, 0x00, 0x00, 0x00, 0x00],
         ]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
     }
 
     fn insn_step(&self) -> usize {

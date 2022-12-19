@@ -154,16 +154,16 @@ impl CapstoneDisassembler {
         for cs_insn in cs_insns.iter() {
             let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
 
-            let mut insn_group = InstructionGroup::Undefined;
+            let mut insn_group = InstructionGroup::Any;
 
             for cs_insn_group in detail.groups() {
                 insn_group = match cs_insn_group.0 {
                     INSN_GRP_JUMP => InstructionGroup::Jump,
                     INSN_GRP_CALL => InstructionGroup::Call,
+                    INSN_GRP_RET => InstructionGroup::Ret,
                     INSN_GRP_PRIV => InstructionGroup::Privileged,
                     INSN_GRP_INT => InstructionGroup::Int,
                     INSN_GRP_IRET => InstructionGroup::Iret,
-                    INSN_GRP_RET => InstructionGroup::Ret,
                     _ => {
                         continue;
                     }

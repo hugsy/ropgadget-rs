@@ -14,9 +14,11 @@ pub enum CpuType {
 pub trait Cpu: Send + Sync + std::fmt::Debug {
     fn cpu_type(&self) -> CpuType;
     fn ptrsize(&self) -> usize;
-    fn ret_insn(&self) -> Vec<Vec<u8>>;
-    fn branch_insn(&self) -> Vec<Vec<u8>>;
     fn insn_step(&self) -> usize;
+
+    fn ret_insns(&self) -> Vec<Vec<u8>>;
+    fn call_insns(&self) -> Vec<Vec<u8>>;
+    fn jmp_insns(&self) -> Vec<Vec<u8>>;
 
     fn name(&self) -> String {
         self.cpu_type().to_string()
