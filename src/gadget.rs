@@ -242,7 +242,8 @@ pub fn find_gadgets_from_position(
         // jump to the position in the file
         //
         let current_position = -((sz - step) as i64);
-        cur.seek(SeekFrom::End(current_position - 1))?;
+
+        cur.seek(SeekFrom::End(current_position - step as i64))?;
         if cur.read_exact(&mut candidate).is_err() {
             warn!("{:?} Cursor reached EOF", std::thread::current().id());
             break;

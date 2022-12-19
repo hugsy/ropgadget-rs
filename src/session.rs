@@ -328,7 +328,6 @@ fn process_section(
             );
 
             let res = find_gadgets_from_position(engine, section, pos, len, cpu);
-
             if res.is_ok() {
                 let mut g = res?;
                 debug!("new {:?}", g);
