@@ -201,6 +201,11 @@ impl Session {
 
         let info = ExecutableDetail::new(&args.filepath, args.format);
 
+        let gadget_types = match args.rop_types.len() {
+            0 => vec![InstructionGroup::Ret],
+            _ => args.rop_types.clone(),
+        };
+
         Session {
             filepath: args.filepath,
             nb_thread: args.thread_num.into(),
@@ -208,7 +213,7 @@ impl Session {
             unique_only: args.unique_only,
             use_color: !args.no_color,
             max_gadget_length: args.max_insn_per_gadget.into(),
-            gadget_types: args.rop_types,
+            gadget_types: gadget_types,
             profile_type: args.profile_type,
             verbosity: verbosity,
             info: info,
