@@ -1,6 +1,6 @@
 extern crate capstone;
 
-use std::fmt;
+use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
     sync::Arc,
@@ -11,23 +11,27 @@ use log::{debug, warn};
 
 use crate::common::GenericResult;
 use crate::cpu;
+use crate::engine::Disassembler;
 use crate::section::Section;
-use crate::{
-    engine::DisassemblyEngine,
-    session::{RopProfileStrategy, Session},
-};
+use crate::session::{RopProfileStrategy, Session};
 
 use clap::ValueEnum;
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum InstructionGroup {
-    Any,
+    Undefined,
     Jump,
     Call,
     Ret,
     Int,
     Iret,
     Privileged,
+}
+
+impl std::fmt::Display for InstructionGroup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -143,7 +147,7 @@ fn collect_previous_instructions(
         let mut v: Vec<(usize, usize)> = memory_chunk
             .windows(sz)
             .enumerate()
-            .filter(|(_, y)| y[0] == *ret.first().unwrap())
+            .filter(|(_, y)| y[0] & *ret.first().unwrap() == *ret.first().unwrap())
             .map(|(x, _)| (x, sz))
             .collect();
 
@@ -164,39 +168,42 @@ pub fn get_all_valid_positions_and_length(
     session: &Arc<Session>,
     cpu: &Box<dyn cpu::Cpu>,
     section: &Section,
+    cursor: usize,
 ) -> GenericResult<Vec<(usize, usize)>> {
-    let data = &section.data;
+    let data = &section.data[cursor..].to_vec();
 
-    match session.gadget_type {
-        InstructionGroup::Ret => {
-            debug!("inserting ret positions and length...");
-            collect_previous_instructions(session, &cpu.ret_insns(), data)
-        }
-        InstructionGroup::Call => {
-            debug!("inserting call positions and length...");
-            collect_previous_instructions(session, &cpu.call_insns(), data)
-        }
-        InstructionGroup::Jump => {
-            debug!("inserting jump positions and length...");
-            collect_previous_instructions(session, &cpu.jmp_insns(), data)
-        }
-        InstructionGroup::Int => todo!(),
-        InstructionGroup::Iret => todo!(),
-        InstructionGroup::Privileged => todo!(),
-        InstructionGroup::Any => {
-            let mut all = cpu.ret_insns().clone();
-            all.append(&mut cpu.call_insns().clone());
-            all.append(&mut cpu.jmp_insns().clone());
-            collect_previous_instructions(session, &all, data)
+    let mut groups = Vec::new();
+
+    for gadget_type in &session.gadget_types {
+        match gadget_type {
+            InstructionGroup::Ret => {
+                debug!("inserting ret positions and length...");
+                groups.append(&mut cpu.ret_insns().clone());
+            }
+            InstructionGroup::Call => {
+                debug!("inserting call positions and length...");
+                groups.append(&mut cpu.call_insns().clone());
+            }
+            InstructionGroup::Jump => {
+                debug!("inserting jump positions and length...");
+                groups.append(&mut cpu.jmp_insns().clone());
+            }
+            InstructionGroup::Int => todo!(),
+            InstructionGroup::Iret => todo!(),
+            InstructionGroup::Privileged => todo!(),
+            InstructionGroup::Undefined => todo!(),
         }
     }
+
+    collect_previous_instructions(session, &groups, data)
 }
 
 ///
 /// from the section.data[pos], disassemble previous instructions
 ///
 pub fn find_gadgets_from_position(
-    engine: &DisassemblyEngine,
+    session: Arc<Session>,
+    engine: &dyn Disassembler,
     section: &Section,
     initial_position: usize,
     initial_len: usize,
@@ -262,22 +269,22 @@ pub fn find_gadgets_from_position(
             Some(x) => {
                 nb_invalid = 0;
                 if x.len() > 0 {
-                    match x.last().unwrap().group {
-                        InstructionGroup::Ret | InstructionGroup::Call => {
-                            let gadget = Gadget::new(x);
-                            if gadgets.iter().all(|x| x.address != gadget.address) {
-                                debug!(
-                                    "pushing new gadget(pos={:x}, sz={}B)",
-                                    gadget.address,
-                                    gadget.raw.len()
-                                );
-                                gadgets.push(gadget);
-                            }
+                    let last_insn = x.last().unwrap();
+                    if session.gadget_types.contains(&last_insn.group) {
+                        let gadget = Gadget::new(x);
+                        if gadgets.iter().all(|x| x.address != gadget.address) {
+                            debug!(
+                                "{:?}: pushing new gadget(address={:x}, sz={})",
+                                thread::current().id(),
+                                gadget.address,
+                                gadget.raw.len()
+                            );
+                            gadgets.push(gadget);
                         }
-                        _ => {}
                     }
                 }
             }
+
             None => {
                 nb_invalid += 1;
                 if nb_invalid == max_invalid_size {

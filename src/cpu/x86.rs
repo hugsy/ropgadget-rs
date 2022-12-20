@@ -73,7 +73,11 @@ impl cpu::Cpu for X64 {
     }
 
     fn jmp_insns(&self) -> Vec<Vec<u8>> {
-        vec![]
+        vec![
+            vec![0xE8, 0],          // jmp rel8
+            vec![0xE9, 0, 0],       // jmp rel16
+            vec![0xE9, 0, 0, 0, 0], // jmp rel32
+        ]
     }
 
     fn insn_step(&self) -> usize {

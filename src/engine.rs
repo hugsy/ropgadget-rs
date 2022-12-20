@@ -20,10 +20,10 @@ pub enum DisassemblyEngineType {
 pub trait Disassembler {
     fn disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>>;
     fn name(&self) -> String;
+    fn id(&self) -> DisassemblyEngineType;
 }
 
 pub struct DisassemblyEngine {
-    pub engine_type: DisassemblyEngineType,
     pub disassembler: Box<dyn Disassembler>,
 }
 
@@ -34,30 +34,15 @@ impl DisassemblyEngine {
     pub fn new(engine_type: &DisassemblyEngineType, cpu: &dyn Cpu) -> Self {
         match engine_type {
             DisassemblyEngineType::Capstone => Self {
-                engine_type: DisassemblyEngineType::Capstone,
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
         }
-    }
-
-    ///
-    ///
-    ///
-    pub fn disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>> {
-        self.disassembler.disassemble(code, address)
-    }
-
-    ///
-    ///
-    ///
-    pub fn name(&self) -> String {
-        self.disassembler.name()
     }
 }
 
 impl std::fmt::Display for DisassemblyEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Engine({})", self.name())
+        write!(f, "Engine({})", self.disassembler.name())
     }
 }
 
@@ -84,7 +69,12 @@ impl Disassembler for CapstoneDisassembler {
 
     fn name(&self) -> String {
         // todo: add version strings
-        "Capstone-Engine".to_string()
+        let (major, minor) = Capstone::lib_version();
+        format!("Capstone-Engine({}.{})", major, minor)
+    }
+
+    fn id(&self) -> DisassemblyEngineType {
+        DisassemblyEngineType::Capstone
     }
 }
 
@@ -96,7 +86,6 @@ impl std::fmt::Display for CapstoneDisassembler {
 
 impl CapstoneDisassembler {
     fn new(cpu: &dyn Cpu) -> Self {
-        // fn new(cpu: &Box<dyn Cpu>) -> Self {
         let cs = match cpu.cpu_type() {
             CpuType::X86 => Capstone::new()
                 .x86()
@@ -154,7 +143,7 @@ impl CapstoneDisassembler {
         for cs_insn in cs_insns.iter() {
             let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
 
-            let mut insn_group = InstructionGroup::Any;
+            let mut insn_group = InstructionGroup::Undefined;
 
             for cs_insn_group in detail.groups() {
                 insn_group = match cs_insn_group.0 {

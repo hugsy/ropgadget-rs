@@ -39,9 +39,9 @@ fn main() -> GenericResult<()> {
     // the real meat of the tool
     //
     info!(
-        "Looking for gadgets in {} executable sections (with {} threads)...'",
+        "Looking for gadgets in {} executable section(s) (with {} threads)...'",
         sections.len(),
-        sess.nb_thread
+        sess.nb_thread,
     );
 
     let arc = Arc::new(sess);

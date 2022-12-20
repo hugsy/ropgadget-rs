@@ -6,7 +6,6 @@ use clap::{ArgAction, Parser, ValueEnum};
 use colored::*;
 use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
 
-use crate::common::GenericResult;
 use crate::cpu;
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 use crate::format::{self, guess_file_format};
@@ -15,23 +14,17 @@ use crate::gadget::{
 };
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum RopGadgetType {
-    /// Any
-    Any,
-    /// Returns only
-    Returns,
-    /// Calls only
-    Calls,
-    /// Jumps
-    Jumps,
-}
-
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum RopProfileStrategy {
     /// Strategy Fast
     Fast,
     /// Strategy Complete
     Complete,
+}
+
+impl std::fmt::Display for RopProfileStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -77,9 +70,13 @@ pub struct Args {
     #[arg(long, default_value_t = 6)]
     max_insn_per_gadget: u8,
 
-    /// The type of gadgets to focus on (default - any)
-    #[arg(long, value_enum, default_value_t = InstructionGroup::Any)]
-    rop_type: InstructionGroup,
+    /// The maximum size of the gadget
+    #[arg(long, default_value_t = 32)]
+    max_size: u8,
+
+    /// The type of gadgets to focus on (default - return only)
+    #[arg(long, value_enum)]
+    rop_types: Vec<InstructionGroup>,
 
     /// The profile type (default - fast)
     #[arg(long, value_enum, default_value_t = RopProfileStrategy::Fast)]
@@ -179,7 +176,7 @@ pub struct Session {
     pub gadgets: Mutex<Vec<Gadget>>,
     pub unique_only: bool,
     pub use_color: bool,
-    pub gadget_type: InstructionGroup,
+    pub gadget_types: Vec<InstructionGroup>,
     pub profile_type: RopProfileStrategy,
 }
 
@@ -211,7 +208,7 @@ impl Session {
             unique_only: args.unique_only,
             use_color: !args.no_color,
             max_gadget_length: args.max_insn_per_gadget.into(),
-            gadget_type: args.rop_type,
+            gadget_types: args.rop_types,
             profile_type: args.profile_type,
             verbosity: verbosity,
             info: info,
@@ -219,52 +216,6 @@ impl Session {
             engine_type: DisassemblyEngineType::Capstone,
         }
     }
-}
-
-//
-// find all the gadgets in the different sections in parallel
-// returns true if no error occured
-//
-pub fn find_gadgets(session: Arc<Session>) -> bool {
-    let mut total_gadgets: usize = 0;
-    let number_of_sections = session.info.format.sections().len();
-    let nb_thread = session.nb_thread;
-
-    debug!(
-        "Using {} threads over {} sections of executable code...",
-        nb_thread, number_of_sections
-    );
-
-    //
-    // multithread parsing of the sections (1 thread/section)
-    //
-    let mut i: usize = 0;
-
-    while i < number_of_sections {
-        let mut threads: Vec<std::thread::JoinHandle<Vec<Gadget>>> = Vec::new();
-
-        for n in 0..nb_thread {
-            debug!("Spawning thread 'thread-{}'...", n);
-            let c = session.clone();
-            let thread = thread::spawn(move || thread_worker(c, i));
-            threads.push(thread);
-            i += 1;
-        }
-
-        for t in threads {
-            debug!("Joining {:?}...", t.thread().id());
-            let gadgets = t.join().unwrap();
-            let cnt = gadgets.len().clone();
-            {
-                let mut data = session.gadgets.lock().unwrap();
-                data.extend(gadgets);
-            }
-            total_gadgets += cnt;
-        }
-    }
-
-    info!("Total gadgets found => {}", total_gadgets);
-    true
 }
 
 impl std::fmt::Debug for Session {
@@ -279,16 +230,99 @@ impl std::fmt::Debug for Session {
 
 impl std::fmt::Display for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let gadget_types: Vec<String> = self.gadget_types.iter().map(|x| x.to_string()).collect();
         write!(
             f,
-            "Session(file={}, {})",
-            self.filepath.to_str().unwrap_or("<NoFile>"),
-            self.info
+            "Session(File='{}', {}, Profile={}, GadgetTypes=[{}])",
+            self.filepath.to_str().unwrap(),
+            self.info,
+            self.profile_type.to_string(),
+            gadget_types.join(", "),
         )
     }
 }
 
-fn thread_worker(session: Arc<Session>, index: usize) -> Vec<Gadget> {
+//
+// find all the gadgets in the different sections in parallel
+// returns true if no error occured
+//
+pub fn find_gadgets(session: Arc<Session>) -> bool {
+    let number_of_sections = session.info.format.sections().len();
+    let nb_thread = session.nb_thread.clone() as usize;
+
+    debug!(
+        "Using {} threads over {} sections of executable code...",
+        nb_thread, number_of_sections
+    );
+
+    //
+    // multithread parsing of each section
+    //
+    for section_idx in 0..number_of_sections {
+        if session.info.format.sections().get(section_idx).is_none() {
+            continue;
+        }
+
+        let section = session.info.format.sections().get(section_idx).unwrap();
+        let chunk_size = section.data.len() / nb_thread;
+
+        //
+        // Fill the thread pool
+        //
+        let mut threads: Vec<std::thread::JoinHandle<Vec<Gadget>>> = Vec::new();
+        let mut pos = 0;
+        let mut thread_pool_size = 0;
+        let mut force_flush = false;
+
+        loop {
+            //
+            // Empty the thread pool if necessary
+            //
+            if thread_pool_size == nb_thread || force_flush {
+                for curthread in threads {
+                    debug!("Joining {:?}...", curthread.thread().id());
+                    let gadgets = curthread.join().unwrap();
+                    {
+                        let mut data = session.gadgets.lock().unwrap();
+                        data.extend(gadgets);
+                    }
+                }
+
+                threads = Vec::new();
+                thread_pool_size = 0;
+
+                if force_flush {
+                    break;
+                }
+            }
+
+            //
+            // Is there still some data to parse?
+            //
+            if pos >= section.data.len() {
+                force_flush = true;
+                continue;
+            }
+
+            //
+            // If so, spawn more workers
+            //
+            let rc_session = Arc::clone(&session);
+            let thread = thread::spawn(move || thread_worker(rc_session, section_idx, pos));
+            threads.push(thread);
+            thread_pool_size += 1;
+            pos += chunk_size;
+        }
+    }
+
+    info!(
+        "Total gadgets found => {}",
+        session.gadgets.lock().unwrap().len()
+    );
+    true
+}
+
+fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadget> {
     let cpu = session.info.cpu.as_ref();
     let engine = DisassemblyEngine::new(&session.engine_type, cpu);
     debug!(
@@ -297,14 +331,7 @@ fn thread_worker(session: Arc<Session>, index: usize) -> Vec<Gadget> {
         engine,
         cpu.cpu_type()
     );
-    process_section(session, index, &engine).unwrap()
-}
 
-fn process_section(
-    session: Arc<Session>,
-    index: usize,
-    engine: &DisassemblyEngine,
-) -> GenericResult<Vec<Gadget>> {
     let mut gadgets: Vec<Gadget> = Vec::new();
     let sections = session.info.format.sections();
     if let Some(section) = sections.get(index) {
@@ -315,23 +342,24 @@ fn process_section(
         );
 
         let cpu = &session.info.cpu;
+        let disass = engine.disassembler.as_ref();
 
-        for (pos, len) in get_all_valid_positions_and_length(&session, cpu, section)? {
+        for (pos, len) in
+            get_all_valid_positions_and_length(&session, cpu, section, cursor).unwrap()
+        {
             debug!(
-                "{:?}: Processing {} (start_address={:x}, size={:x}) slice[..{:x}+{:x}] ",
+                "{:?}: Processing Section {}[..{:x}+{:x}] (size={:x})",
                 thread::current().id(),
                 section.name,
-                section.start_address,
-                section.size,
                 pos,
-                len
+                len,
+                section.size,
             );
 
-            let res = find_gadgets_from_position(engine, section, pos, len, cpu);
+            let res = find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu);
             if res.is_ok() {
-                let mut g = res?;
-                debug!("new {:?}", g);
-                gadgets.append(&mut g);
+                let mut gadget = res.unwrap();
+                gadgets.append(&mut gadget);
             }
         }
 
@@ -348,5 +376,5 @@ fn process_section(
         );
     }
 
-    Ok(gadgets)
+    gadgets
 }
