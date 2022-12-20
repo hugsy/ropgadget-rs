@@ -12,17 +12,17 @@ impl cpu::Cpu for Arm {
         // TODO: thumb
     }
 
-    fn ret_insns(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            vec![0xc0, 0x03, 0x5f, 0xd6], // RET
+            (vec![0xc0, 0x03, 0x5f, 0xd6], vec![0xff, 0xff, 0xff, 0xff]), // RET
         ]
     }
 
-    fn call_insns(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![]
     }
 
-    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+    fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![]
     }
 
@@ -48,28 +48,28 @@ impl cpu::Cpu for Arm64 {
         8
     }
 
-    fn ret_insns(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            vec![0xc0, 0x03, 0x5f, 0xd6], // RET
+            (vec![0xc0, 0x03, 0x5f, 0xd6], vec![0xff, 0xff, 0xff, 0xff]), // RET
         ]
     }
 
-    fn call_insns(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            vec![0x14],      // B LABEL
-            vec![0x1, 0x14], // BL LABEL
-            vec![0xd4],      // B.cond
-            vec![0xb4],      // CBZ // CBNZ
+            (vec![0x14], vec![0xff]),             // B LABEL
+            (vec![0x01, 0x14], vec![0xff, 0xff]), // BL LABEL
+            (vec![0xd4], vec![0xff]),             // B.cond
+            (vec![0xb4], vec![0xff]),             // CBZ // CBNZ
         ]
     }
 
-    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+    fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            vec![0b1101_0100, 0b0000_1001],                           // J LABEL
-            vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // BLR Xn
-            vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // ERET
-            vec![0b1101_0100, 0b0001_0001, 0b0000_0000, 0b0011_1111], // BR Xn
-            vec![0b1101_0101, 0b0000_0000, 0b0000_0000, 0b0011_1111], // RET Xn
+            // vec![0b1101_0100, 0b0000_1001],                           // J LABEL
+            // vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // BLR Xn
+            // vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // ERET
+            // vec![0b1101_0100, 0b0001_0001, 0b0000_0000, 0b0011_1111], // BR Xn
+            // vec![0b1101_0101, 0b0000_0000, 0b0000_0000, 0b0011_1111], // RET Xn
         ]
     }
 

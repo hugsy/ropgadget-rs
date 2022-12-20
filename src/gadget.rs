@@ -1,5 +1,6 @@
 extern crate capstone;
 
+use std::cmp::Ordering;
 use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
@@ -138,16 +139,24 @@ impl Gadget {
 
 fn collect_previous_instructions(
     session: &Arc<Session>,
-    group: &Vec<Vec<u8>>,
+    group: &Vec<(Vec<u8>, Vec<u8>)>,
     memory_chunk: &Vec<u8>,
 ) -> GenericResult<Vec<(usize, usize)>> {
     let mut res: Vec<(usize, usize)> = Vec::new();
-    for ret in group {
-        let sz = ret.len();
+
+    for (opcodes, mask) in group {
+        let sz = opcodes.len();
+
         let mut v: Vec<(usize, usize)> = memory_chunk
             .windows(sz)
             .enumerate()
-            .filter(|(_, y)| y[0] & *ret.first().unwrap() == *ret.first().unwrap())
+            .filter(|(_, y)| {
+                y.iter()
+                    .enumerate()
+                    .map(|(i, z)| z & mask[i])
+                    .cmp(opcodes.to_owned())
+                    == Ordering::Equal
+            })
             .map(|(x, _)| (x, sz))
             .collect();
 
