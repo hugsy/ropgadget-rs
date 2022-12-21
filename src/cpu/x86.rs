@@ -15,22 +15,29 @@ impl cpu::Cpu for X86 {
 
     fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xc3], vec![0xff]), // ret
-            (vec![0xc2], vec![0xff]), // ret imm
-            (vec![0xcb], vec![0xff]), // retf
-            (vec![0xcf], vec![0xff]), // retf imm
+            (vec![0xc3], vec![0xff]),                         // ret
+            (vec![0xcb], vec![0xff]),                         // retf
+            (vec![0xc2, 0x00, 0x00], vec![0xff, 0x00, 0x00]), // ret imm16
+            (vec![0xcf, 0x00, 0x00], vec![0xff, 0x00, 0x00]), // retf imm16
         ]
     }
 
     fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xff, 0xd0], vec![0xff, 0xf8]), // CALL REG
+            (
+                vec![0xe8, 0x00, 0x00, 0x00, 0x00],
+                vec![0xff, 0x00, 0x00, 0x00, 0x00],
+            ), // CALL rel32
+            (vec![0xff, 0xd0], vec![0xff, 0xf0]), // CALL REG32
+            (vec![0xff, 0b0001_0000], vec![0xff, 0b1111_0000]), // CALL [REG32]
+            (vec![0xff, 0b0101_0001, 0], vec![0xff, 0b1111_0000, 0]), // CALL [REG32+DISP8]
         ]
     }
 
     fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xFF, 0xe7], vec![0xff, 0xf8]), // JMP REG32
+            (vec![0xe9, 0, 0, 0, 0], vec![0xff, 0, 0, 0, 0]), // JMP imm32
+            (vec![0xFF, 0xe7], vec![0xff, 0xf8]),             // JMP REG32
         ]
     }
 
@@ -58,27 +65,37 @@ impl cpu::Cpu for X64 {
 
     fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xc3], vec![0xff]),                         // ret
-            (vec![0xcb], vec![0xff]),                         // retf
-            (vec![0xc2, 0x00, 0x00], vec![0xff, 0xff, 0xff]), // ret imm
-            (vec![0xca, 0x00, 0x00], vec![0xff, 0xff, 0xff]), // retf imm
+            (vec![0xc3], vec![0xff]),                         // RET
+            (vec![0xcb], vec![0xff]),                         // RETF
+            (vec![0xc2, 0x00, 0x00], vec![0xff, 0x00, 0x00]), // RET imm16
+            (vec![0xcf, 0x00, 0x00], vec![0xff, 0x00, 0x00]), // RETF imm16
         ]
     }
 
     fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xff, 0x00], vec![0xff, 0x00]),
             (
                 vec![0xe8, 0x00, 0x00, 0x00, 0x00],
-                vec![0xfe, 0x00, 0x00, 0x00, 0x00],
-            ),
+                vec![0xff, 0x00, 0x00, 0x00, 0x00],
+            ), // CALL rel32
+            (vec![0xff, 0xd0], vec![0xff, 0xf0]), // CALL REG64
+            (vec![0x41, 0xff, 0xd0], vec![0xff, 0xff, 0xf0]), // CALL REX.W REG64
+            (vec![0xff, 0b0001_0000], vec![0xff, 0b1111_0000]), // CALL [REG64]
+            (vec![0x41, 0xff, 0b0001_0000], vec![0x41, 0xff, 0b1111_0000]), // CALL [REX.W REG64]
+            (vec![0xff, 0b0101_0001, 0], vec![0xff, 0b1111_0000, 0]), // CALL [REG64+DISP8]
+            (
+                vec![0x41, 0xff, 0b0101_0001, 0],
+                vec![0xff, 0xff, 0b1111_0000, 0],
+            ), // CALL [REX.W REG64+DISP8]
         ]
     }
 
     fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xFF, 0xe0], vec![0xff, 0xf7]),             // JMP REG32
-            (vec![0x41, 0xFF, 0xe0], vec![0xff, 0xff, 0xf7]), // JMP REX.W REG64
+            (vec![0xff, 0xe0], vec![0xff, 0xf8]),             // JMP REG64
+            (vec![0x41, 0xff, 0xe0], vec![0xff, 0xff, 0xf8]), // JMP REX.W REG64
+            (vec![0xeb, 0x00], vec![0xff, 0x00]),             // JMP imm8
+            (vec![0xe9, 0, 0, 0, 0], vec![0xff, 0, 0, 0, 0]), // JMP imm32
         ]
     }
 

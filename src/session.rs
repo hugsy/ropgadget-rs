@@ -48,7 +48,7 @@ pub struct Args {
 
     /// Unique gadgets
     #[arg(short, long, action = ArgAction::SetTrue)]
-    unique_only: bool,
+    unique: bool,
 
     /// Force the architecture to given value
     #[arg(long, value_enum)]
@@ -210,7 +210,7 @@ impl Session {
             filepath: args.filepath,
             nb_thread: args.thread_num.into(),
             output_file: args.output_file,
-            unique_only: args.unique_only,
+            unique_only: args.unique,
             use_color: !args.no_color,
             max_gadget_length: args.max_insn_per_gadget.into(),
             gadget_types: gadget_types,
@@ -255,10 +255,7 @@ pub fn find_gadgets(session: Arc<Session>) -> bool {
     let number_of_sections = session.info.format.sections().len();
     let nb_thread = session.nb_thread.clone() as usize;
 
-    debug!(
-        "Using {} threads over {} sections of executable code...",
-        nb_thread, number_of_sections
-    );
+    debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
 
     //
     // multithread parsing of each section
@@ -314,6 +311,12 @@ pub fn find_gadgets(session: Arc<Session>) -> bool {
             //
             let rc_session = Arc::clone(&session);
             let thread = thread::spawn(move || thread_worker(rc_session, section_idx, pos));
+            debug!(
+                "Spawning {:?} (pos={} section_index={})...",
+                thread.thread().id(),
+                pos,
+                section_idx
+            );
             threads.push(thread);
             thread_pool_size += 1;
             pos += chunk_size;

@@ -60,15 +60,10 @@ impl Elf {
         let cpu: Box<dyn cpu::Cpu> = match obj.header.e_machine {
             goblin::elf::header::EM_386 => Box::new(cpu::x86::X86 {}),
             goblin::elf::header::EM_X86_64 => Box::new(cpu::x86::X64 {}),
-            goblin::elf::header::EM_ARM => {
-                if obj.is_64 {
-                    Box::new(cpu::arm::Arm64 {})
-                } else {
-                    Box::new(cpu::arm::Arm {})
-                }
-            }
+            goblin::elf::header::EM_ARM => Box::new(cpu::arm::Arm {}),
+            goblin::elf::header::EM_AARCH64 => Box::new(cpu::arm::Arm {}),
             _ => {
-                panic!("Elf is corrupted")
+                panic!("ELF machine format is unsupported")
             }
         };
 

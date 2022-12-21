@@ -53,7 +53,12 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableForm
         Err(_) => return Err(Error::InvalidFileError),
     };
 
-    match Object::parse(&buffer).unwrap() {
+    let parsed = match Object::parse(&buffer) {
+        Ok(e) => e,
+        Err(_) => return Err(Error::InvalidFileError),
+    };
+
+    match parsed {
         Object::PE(obj) => Ok(Box::new(pe::Pe::new(file.to_path_buf(), obj))),
         Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
         Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),

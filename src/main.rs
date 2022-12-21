@@ -7,7 +7,7 @@ use std::io::prelude::*;
 use std::sync::Arc;
 
 use colored::*;
-use log::{error, info};
+use log::{debug, error, info, warn};
 
 mod common;
 mod cpu;
@@ -64,8 +64,15 @@ fn main() -> GenericResult<()> {
     // if unique, filter out doublons
     //
     if unique_only {
-        info!("Filtering out deplicate gadgets...");
+        debug!(
+            "Filtering {} gadgets for deplicates ...",
+            total_gadgets_found
+        );
         gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(&b.text(false)));
+        info!(
+            "{} duplicate gadgets removed",
+            total_gadgets_found - gadgets.len()
+        );
     }
 
     if let Some(filename) = outfile {
@@ -74,9 +81,13 @@ fn main() -> GenericResult<()> {
             gadgets.len(),
             filename.to_str().unwrap()
         );
+        if use_color {
+            warn!("Disabling colors when writing to file");
+        }
+
         let mut file = fs::File::create(filename)?;
         for g in &*gadgets {
-            let txt = g.text(use_color);
+            let txt = g.text(false);
             let addr = entrypoint_address + g.address;
             file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
         }
