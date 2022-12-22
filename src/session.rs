@@ -171,7 +171,7 @@ pub struct Session {
     //
     // the info need to build, store and show the ropgadgets
     //
-    engine_type: DisassemblyEngineType,
+    pub engine_type: DisassemblyEngineType,
     pub max_gadget_length: usize,
     pub gadgets: Mutex<Vec<Gadget>>,
     pub unique_only: bool,
