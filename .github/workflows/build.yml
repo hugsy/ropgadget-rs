@@ -115,12 +115,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
 
       - name: cargo check
         run: cargo check
 
       - name: cargo test
-        run: cargo test
+        run: |
+          ls
+          pwd
+          cargo test
         
