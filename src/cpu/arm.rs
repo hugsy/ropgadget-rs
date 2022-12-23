@@ -1,14 +1,10 @@
 use crate::cpu;
 
-pub struct ARM {}
+pub struct Arm;
 
-impl cpu::Cpu for ARM {
+impl cpu::Cpu for Arm {
     fn cpu_type(&self) -> cpu::CpuType {
         cpu::CpuType::ARM
-    }
-
-    fn name(&self) -> &str {
-        "arm"
     }
 
     fn ptrsize(&self) -> usize {
@@ -16,13 +12,17 @@ impl cpu::Cpu for ARM {
         // TODO: thumb
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc0, 0x03, 0x5f, 0xd6], // RET
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
         vec![]
     }
 
@@ -31,32 +31,44 @@ impl cpu::Cpu for ARM {
     }
 }
 
-pub struct ARM64 {}
+impl std::fmt::Debug for Arm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Arm").finish()
+    }
+}
 
-impl cpu::Cpu for ARM64 {
+pub struct Arm64;
+
+impl cpu::Cpu for Arm64 {
     fn cpu_type(&self) -> cpu::CpuType {
         cpu::CpuType::ARM64
-    }
-
-    fn name(&self) -> &str {
-        "arm64"
     }
 
     fn ptrsize(&self) -> usize {
         8
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc0, 0x03, 0x5f, 0xd6], // RET
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
         vec![]
     }
 
     fn insn_step(&self) -> usize {
         4
+    }
+}
+
+impl std::fmt::Debug for Arm64 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Arm64").finish()
     }
 }

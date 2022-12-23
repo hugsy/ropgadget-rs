@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::cpu;
 
 pub struct X86;
@@ -7,15 +9,11 @@ impl cpu::Cpu for X86 {
         cpu::CpuType::X86
     }
 
-    fn name(&self) -> &str {
-        "x86"
-    }
-
     fn ptrsize(&self) -> usize {
         4
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc3], // ret
             vec![0xc2], // ret imm
@@ -24,14 +22,24 @@ impl cpu::Cpu for X86 {
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xff], // call/jmp
         ]
     }
 
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
     fn insn_step(&self) -> usize {
         1
+    }
+}
+
+impl std::fmt::Debug for X86 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("X86").finish()
     }
 }
 
@@ -42,15 +50,11 @@ impl cpu::Cpu for X64 {
         cpu::CpuType::X64
     }
 
-    fn name(&self) -> &str {
-        "x86-64"
-    }
-
     fn ptrsize(&self) -> usize {
         8
     }
 
-    fn ret_insn(&self) -> Vec<Vec<u8>> {
+    fn ret_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xc3],             // ret
             vec![0xcb],             // retf
@@ -59,7 +63,7 @@ impl cpu::Cpu for X64 {
         ]
     }
 
-    fn branch_insn(&self) -> Vec<Vec<u8>> {
+    fn call_insns(&self) -> Vec<Vec<u8>> {
         vec![
             vec![0xff, 0x00],
             vec![0xe8, 0x00, 0x00, 0x00, 0x00],
@@ -68,7 +72,17 @@ impl cpu::Cpu for X64 {
         ]
     }
 
+    fn jmp_insns(&self) -> Vec<Vec<u8>> {
+        vec![]
+    }
+
     fn insn_step(&self) -> usize {
         1
+    }
+}
+
+impl std::fmt::Debug for X64 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("X64").finish()
     }
 }

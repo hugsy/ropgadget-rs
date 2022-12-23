@@ -3,9 +3,7 @@ pub enum Error {
     IoError(std::io::Error),
     ParsingError(goblin::error::Error),
     ThreadRuntimeError(std::boxed::Box<dyn std::any::Any + std::marker::Send>),
-
-    GenericError(&'static str),
-    MismatchFileFormatError(&'static str),
+    InvalidFileError,
 }
 
 #[derive(Debug)]
