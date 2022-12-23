@@ -66,6 +66,7 @@ impl Pe {
             goblin::pe::header::COFF_MACHINE_X86 => Box::new(cpu::x86::X86 {}),
             goblin::pe::header::COFF_MACHINE_X86_64 => Box::new(cpu::x86::X64 {}),
             goblin::pe::header::COFF_MACHINE_ARM => Box::new(cpu::arm::Arm {}),
+            goblin::pe::header::COFF_MACHINE_ARMNT => Box::new(cpu::arm::Arm {}),
             goblin::pe::header::COFF_MACHINE_ARM64 => Box::new(cpu::arm::Arm64 {}),
             _ => {
                 panic!("PE is corrupted")

@@ -16,9 +16,13 @@ pub trait Cpu: Send + Sync + std::fmt::Debug {
     fn ptrsize(&self) -> usize;
     fn insn_step(&self) -> usize;
 
-    fn ret_insns(&self) -> Vec<Vec<u8>>;
-    fn call_insns(&self) -> Vec<Vec<u8>>;
-    fn jmp_insns(&self) -> Vec<Vec<u8>>;
+    //
+    // for each instruction type, the format is Vector<opcode, mask>
+    //
+
+    fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+    fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+    fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
     fn name(&self) -> String {
         self.cpu_type().to_string()

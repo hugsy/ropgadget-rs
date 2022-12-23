@@ -1,13 +1,14 @@
 #[macro_use]
 extern crate bitflags;
 
-use std::fs;
 use std::io::prelude::*;
+use std::{fs, path::PathBuf};
 
 use std::sync::Arc;
 
 use colored::*;
-use log::{error, info};
+use gadget::InstructionGroup;
+use log::{debug, error, info, warn, LevelFilter};
 
 mod common;
 mod cpu;
@@ -19,14 +20,10 @@ mod section;
 mod session;
 
 use common::GenericResult;
-use session::Session;
+use session::{RopProfileStrategy, Session};
 
-fn main() -> GenericResult<()> {
-    let sess = Session::new();
-    info!("Created session: {}", sess);
-
+fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
     let start_timestamp = std::time::Instant::now();
-
     let sections = sess.info.format.sections();
     let total_gadgets_found: usize;
     let use_color = sess.use_color.clone();
@@ -39,9 +36,9 @@ fn main() -> GenericResult<()> {
     // the real meat of the tool
     //
     info!(
-        "Looking for gadgets in {} executable sections (with {} threads)...'",
+        "Looking for gadgets in {} executable section(s) (with {} threads)...'",
         sections.len(),
-        sess.nb_thread
+        sess.nb_thread,
     );
 
     let arc = Arc::new(sess);
@@ -64,8 +61,15 @@ fn main() -> GenericResult<()> {
     // if unique, filter out doublons
     //
     if unique_only {
-        info!("Filtering out deplicate gadgets...");
+        debug!(
+            "Filtering {} gadgets for deplicates ...",
+            total_gadgets_found
+        );
         gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(&b.text(false)));
+        info!(
+            "{} duplicate gadgets removed",
+            total_gadgets_found - gadgets.len()
+        );
     }
 
     if let Some(filename) = outfile {
@@ -74,9 +78,13 @@ fn main() -> GenericResult<()> {
             gadgets.len(),
             filename.to_str().unwrap()
         );
+        if use_color {
+            warn!("Disabling colors when writing to file");
+        }
+
         let mut file = fs::File::create(filename)?;
         for g in &*gadgets {
-            let txt = g.text(use_color);
+            let txt = g.text(false);
             let addr = entrypoint_address + g.address;
             file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
         }
@@ -115,4 +123,125 @@ fn main() -> GenericResult<()> {
     }
 
     Ok(())
+}
+
+fn main() -> GenericResult<()> {
+    let sess = Session::new();
+    info!("Created session: {}", sess);
+
+    collect_all_gadgets(sess)
+}
+
+fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
+    #![allow(dead_code)]
+    let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
+    let output_fname = PathBuf::from(format!("c:/temp/rop-{}-{}.{}", sz, arch, fmt));
+    let s = Session {
+        filepath: input_fname.clone(),
+        nb_thread: 2,
+        output_file: Some(output_fname.clone()),
+        unique_only: true,
+        use_color: false,
+        max_gadget_length: 16,
+        gadget_types: vec![InstructionGroup::Ret],
+        profile_type: RopProfileStrategy::Fast,
+        verbosity: LevelFilter::Debug,
+        info: session::ExecutableDetail::new(&input_fname, None),
+        gadgets: std::sync::Mutex::new(Vec::new()),
+        engine_type: engine::DisassemblyEngineType::Capstone,
+    };
+
+    let res = collect_all_gadgets(s).is_ok();
+
+    fs::remove_file(output_fname.as_path()).unwrap();
+
+    res
+}
+
+#[cfg(test)]
+mod tests {
+
+    mod pe {
+        use super::super::*;
+        const FMT: &str = "pe";
+
+        #[test]
+        fn x86() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "x86", FMT));
+            }
+        }
+
+        #[test]
+        fn x64() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "x64", FMT));
+            }
+        }
+
+        #[test]
+        fn arm32() {
+            assert!(test_one("small", "arm32", FMT));
+            assert!(test_one("big", "arm32", FMT));
+        }
+
+        #[test]
+        fn arm64() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "arm64", FMT));
+            }
+        }
+    }
+
+    mod elf {
+        use super::super::*;
+        const FMT: &str = "elf";
+
+        #[test]
+        fn x86() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "x86", FMT));
+            }
+        }
+
+        #[test]
+        fn x64() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "x64", FMT));
+            }
+        }
+
+        #[test]
+        fn arm32() {
+            for sz in vec!["big"] {
+                assert!(test_one(sz, "arm32", FMT));
+            }
+        }
+
+        #[test]
+        fn arm64() {
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "arm64", FMT));
+            }
+        }
+    }
+
+    mod macho {
+        use super::super::*;
+        const FMT: &str = "macho";
+
+        #[test]
+        fn x86() {
+            for sz in vec!["small"] {
+                assert!(test_one(sz, "x86", FMT));
+            }
+        }
+
+        #[test]
+        fn x64() {
+            for sz in vec!["small"] {
+                assert!(test_one(sz, "x64", FMT));
+            }
+        }
+    }
 }
