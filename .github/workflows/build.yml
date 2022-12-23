@@ -121,7 +121,7 @@ jobs:
 
       - name: cargo test
         run: |
-          ls
+          ls -R
           pwd
           cargo test
         
