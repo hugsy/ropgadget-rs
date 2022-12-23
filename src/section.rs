@@ -45,3 +45,28 @@ impl Section {
         }
     }
 }
+
+impl From<&goblin::elf::section_header::SectionHeader> for Section {
+    fn from(s: &goblin::elf::section_header::SectionHeader) -> Self {
+        let permission: Permission;
+        match s.is_writable() {
+            true => {
+                permission = Permission::READABLE | Permission::EXECUTABLE | Permission::WRITABLE
+            }
+            false => permission = Permission::READABLE | Permission::EXECUTABLE,
+        };
+
+        let start_address = s.sh_addr as u64;
+        let size = s.sh_size as usize;
+        let end_address = s.sh_addr + size as u64;
+
+        Self {
+            start_address,
+            end_address,
+            size,
+            name: String::from(""),
+            permission,
+            data: vec![0; size],
+        }
+    }
+}

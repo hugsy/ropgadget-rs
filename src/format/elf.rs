@@ -6,7 +6,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use crate::cpu;
-use crate::{format::Format, section::Permission, section::Section};
+use crate::{format::Format, section::Section};
 
 use super::ExecutableFormat;
 
@@ -29,7 +29,7 @@ impl Elf {
         let mut reader = BufReader::new(file);
 
         for s in &obj.section_headers {
-            trace!("{:?}", s);
+            trace!("Testing section {:?}", s);
 
             //
             // disregard non executable section
@@ -38,23 +38,24 @@ impl Elf {
                 continue;
             }
 
-            let mut perm = Permission::READABLE | Permission::EXECUTABLE;
+            debug!("Importing section {:?}", s);
 
-            if s.is_writable() {
-                perm |= Permission::WRITABLE;
+            let mut section = Section::from(s);
+            section.name = String::from(&obj.shdr_strtab[s.sh_name]);
+
+            if reader.seek(SeekFrom::Start(s.sh_addr as u64)).is_err() {
+                panic!(
+                    "Invalid offset {} for section '{}', corrupted ELF?",
+                    s.sh_addr, section.name
+                )
             }
 
-            let section_name = &obj.shdr_strtab[s.sh_name];
-
-            let mut section = Section::new(s.sh_addr as u64, (s.sh_addr + s.sh_size - 1) as u64);
-
-            section.permission = perm;
-            section.name = section_name.to_string();
-
-            reader.seek(SeekFrom::Start(s.sh_addr as u64)).unwrap();
-            reader.read_exact(&mut section.data).unwrap();
-
-            executable_sections.push(section);
+            match reader.read_exact(&mut section.data) {
+                Ok(_) => {
+                    executable_sections.push(section);
+                }
+                Err(e) => panic!("Failed to read '{}' section: {:?}", section.name, e),
+            };
         }
 
         let cpu: Box<dyn cpu::Cpu> = match obj.header.e_machine {

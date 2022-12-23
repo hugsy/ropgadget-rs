@@ -13,13 +13,25 @@ impl cpu::Cpu for Arm {
     }
 
     fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-        vec![
-            (vec![0xc0, 0x03, 0x5f, 0xd6], vec![0xff, 0xff, 0xff, 0xff]), // RET
-        ]
+        vec![(
+            vec![0xd6, 0x5f, 0x03, 0xc0].into_iter().rev().collect(),
+            vec![0xff, 0xff, 0xff, 0xff].into_iter().rev().collect(),
+        )]
     }
 
     fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-        vec![]
+        vec![
+            (
+                vec![0b1101_0001, 0b0010_1111, 0b1111_1111, 0b0001_0000]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+                vec![0b1111_1111, 0b1111_1111, 0b1111_1111, 0b1111_0000]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+            ), // 4.3 Branch and Exchange (BX)
+        ]
     }
 
     fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -50,26 +62,44 @@ impl cpu::Cpu for Arm64 {
 
     fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0xc0, 0x03, 0x5f, 0xd6], vec![0xff, 0xff, 0xff, 0xff]), // RET
+            (
+                vec![0xd6, 0x5f, 0x03, 0xc0].into_iter().rev().collect(),
+                vec![0xff, 0xff, 0xff, 0xff].into_iter().rev().collect(),
+            ), // RET
         ]
     }
 
     fn call_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            (vec![0x14], vec![0xff]),             // B LABEL
-            (vec![0x01, 0x14], vec![0xff, 0xff]), // BL LABEL
-            (vec![0xd4], vec![0xff]),             // B.cond
-            (vec![0xb4], vec![0xff]),             // CBZ // CBNZ
+            // (vec![0x14], vec![0xff]),             // B LABEL
+            // (vec![0x01, 0x14], vec![0xff, 0xff]), // BL LABEL
+            // (vec![0xd4], vec![0xff]),             // B.cond
+            // (vec![0xb4], vec![0xff]),             // CBZ // CBNZ
+            (
+                vec![0b1101_0110, 0b0011_1111, 0b0000_0000, 0b0000_0000]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+                vec![0b1111_1111, 0b1111_1111, 0b1111_0000, 0b0001_1111]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+            ), // C6.2.35 BLR
         ]
     }
 
     fn jmp_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
         vec![
-            // vec![0b1101_0100, 0b0000_1001],                           // J LABEL
-            // vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // BLR Xn
-            // vec![0b1101_0101, 0b0001_0000, 0b0000_0000, 0b0011_1111], // ERET
-            // vec![0b1101_0100, 0b0001_0001, 0b0000_0000, 0b0011_1111], // BR Xn
-            // vec![0b1101_0101, 0b0000_0000, 0b0000_0000, 0b0011_1111], // RET Xn
+            (
+                vec![0b1101_0110, 0b0001_1111, 0b0000_0000, 0b0000_0000]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+                vec![0b1111_1111, 0b1111_1111, 0b1111_0000, 0b0001_1111]
+                    .into_iter()
+                    .rev()
+                    .collect(),
+            ), // C6.2.37 BR
         ]
     }
 
