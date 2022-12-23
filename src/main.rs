@@ -139,7 +139,7 @@ fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
     let s = Session {
         filepath: input_fname.clone(),
         nb_thread: 2,
-        output_file: Some(output_fname),
+        output_file: Some(output_fname.clone()),
         unique_only: true,
         use_color: false,
         max_gadget_length: 16,
@@ -151,7 +151,11 @@ fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
         engine_type: engine::DisassemblyEngineType::Capstone,
     };
 
-    collect_all_gadgets(s).is_ok()
+    let res = collect_all_gadgets(s).is_ok();
+
+    fs::remove_file(output_fname.as_path()).unwrap();
+
+    res
 }
 
 #[cfg(test)]
@@ -209,7 +213,7 @@ mod tests {
 
         #[test]
         fn arm32() {
-            for sz in vec!["small", "big"] {
+            for sz in vec!["big"] {
                 assert!(test_one(sz, "arm32", FMT));
             }
         }
