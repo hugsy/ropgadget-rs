@@ -135,7 +135,8 @@ fn main() -> GenericResult<()> {
 fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
     #![allow(dead_code)]
     let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
-    let output_fname = PathBuf::from(format!("c:/temp/rop-{}-{}.{}", sz, arch, fmt));
+    let mut output_fname = std::env::temp_dir();
+    output_fname.push(format!("rop-{}-{}.{}", sz, arch, fmt));
     let s = Session {
         filepath: input_fname.clone(),
         nb_thread: 2,
