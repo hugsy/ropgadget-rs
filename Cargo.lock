@@ -265,7 +265,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rp-rs"
+name = "ropgadget-rs"
 version = "0.3.0"
 dependencies = [
  "bitflags",

@@ -1,6 +1,6 @@
 # ropgadget-rs
 
-[![CI Build](https://github.com/hugsy/rp-rs/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/hugsy/rp-rs/actions/workflows/build.yml)
+[![CI Build](https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml)
 
 ## Why another ROP gadget finder?
 
@@ -11,16 +11,16 @@ You've been warned, don't blame me...
 Currently support ELF/PE/Mach formats, and x86/x64/arm/arm64 architectures.
 
 
-## rp-rs
+## ropgadget-rs
 
 ```bash
-PS C:\Users\hugsy❯ .\rp-rs.exe --help
-rp-rs 0.3
+PS C:\Users\hugsy❯ .\ropgadget-rs.exe --help
+ropgadget-rs 0.3
 hugsy
 Another (bad) ROP gadget finder
 
 USAGE:
-    rp-rs.exe [FLAGS] [OPTIONS] <FILE>
+    ropgadget-rs.exe [FLAGS] [OPTIONS] <FILE>
 
 ARGS:
     <FILE>    The input file to check
@@ -53,8 +53,8 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Then build:
 
 ```bash
-$ git clone https://github.com/hugsy/rp-rs
-$ cd rp-rs
+$ git clone https://github.com/hugsy/ropgadget-rs
+$ cd ropgadget-rs
 $ cargo build
 ```
 
@@ -70,7 +70,7 @@ $ cargo run -- --help
 Via `cargo`:
 
 ```bash
-$ cargo install --bins --git https://github.com/hugsy/rp-rs.git
+$ cargo install --bins --git https://github.com/hugsy/ropgadget-rs.git
 ```
 
 ## Perfs
@@ -82,7 +82,7 @@ For a lame benchmark: here on an old i5-4300M (build in `--release` mode) with 2
  * `ntoskrnl.exe` (Windows 10 RS6 - 10.0.19041.329) - 10,921,280 bytes
 
 ```bash
-PS C:\Users\hugsy>  .\rp-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
+PS C:\Users\hugsy>  .\ropgadget-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
 [INFO] - Checking file '.\ntoskrnl-rs6.exe'
 [INFO] - Creating new Session(file=.\ntoskrnl-rs6.exe, Info(Arch=x86-64, OS=PE))
 [INFO] - Looking for gadgets in 15 sections (with 2 threads)...'
@@ -94,7 +94,7 @@ PS C:\Users\hugsy>  .\rp-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
  * `msedge.dll` (Chromium Edge - 83.0.478.64) - 145,665,416 bytes
 
 ```bash
-PS C:\Users\hugsy> .\rp-rs.exe -o rop.txt -vv .\msedge.dll
+PS C:\Users\hugsy> .\ropgadget-rs.exe -o rop.txt -vv .\msedge.dll
 [INFO] - Checking file '.\msedge.dll'
 [INFO] - Creating new Session(file=.\msedge.dll, Info(Arch=x86-64, OS=PE))
 [INFO] - Looking for gadgets in 1 sections (with 2 threads)...'
@@ -106,7 +106,7 @@ PS C:\Users\hugsy> .\rp-rs.exe -o rop.txt -vv .\msedge.dll
 YMMV but most small files (like Unix binaries) will execute in way under 1 second.
 
 ```bash
-wsl@ph0ny:/mnt/d/Code/rp-rs/target/release$ ./rp-rs -vv -o /dev/null /bin/ls
+wsl@ph0ny:/mnt/d/Code/ropgadget-rs/target/release$ ./ropgadget-rs -vv -o /dev/null /bin/ls
 [INFO] - Checking file '/bin/ls'
 [INFO] - Creating new Session(file=/bin/ls, Info(Arch=x86-64, OS=ELF))
 [INFO] - Looking for gadgets in 5 sections (with 2 threads)...'

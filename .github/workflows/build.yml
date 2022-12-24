@@ -6,8 +6,8 @@ on:
 
 env:
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-  PROJECT_NAME: "rp-rs"
-  REPO: hugsy/rp-rs
+  PROJECT_NAME: "ropgadget-rs"
+  REPO: hugsy/ropgadget-rs
   VERBOSE: "1"
   RUST_BACKTRACE: 1
 
@@ -123,4 +123,4 @@ jobs:
 
       - name: cargo test
         run: cargo test
-        
+
