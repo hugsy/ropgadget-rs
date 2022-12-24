@@ -1,6 +1,6 @@
 [package]
 name = "ropgadget-rs"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["hugsy <hugsy@blah.cat>"]
 edition = "2018"
 description = "Another (bad) ROP gadget finder"
