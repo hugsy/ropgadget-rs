@@ -8,37 +8,90 @@ RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a 
 
 You've been warned, don't blame me...
 
-Currently support ELF/PE/Mach formats, and x86/x64/arm/arm64 architectures.
+Currently supports:
+
+|      | ELF | PE | Mach  |
+|:-----:|:---:|:--:|:----:|
+| x86   | ✅ | ✅ | ❌   |
+| x64   | ✅ | ✅ | ✅   |
+| arm   | ✅ | ✅ | ❌   |
+| arm64 | ✅ | ✅ | ❌   |
 
 
 ## ropgadget-rs
 
-```bash
-PS C:\Users\hugsy❯ .\ropgadget-rs.exe --help
-ropgadget-rs 0.3
-hugsy
+```text
+❯ .\ropgadget-rs.exe --help
 Another (bad) ROP gadget finder
 
-USAGE:
-    ropgadget-rs.exe [FLAGS] [OPTIONS] <FILE>
+Usage: rp-rs.exe [OPTIONS] <FILE>
 
-ARGS:
-    <FILE>    The input file to check
+Arguments:
+  <FILE>
+          The file to parse
 
-FLAGS:
-    -h, --help        Prints help information
-        --no-color    Do not colorize the output (only applies for stdout)
-    -u, --unique      Show unique gadget only
-    -v                Increase verbosity (repeatable from 1 to 4)
-    -V, --version     Prints version information
+Options:
+  -t, --number-of-threads <THREAD_NUM>
+          The number of threads to use
 
-OPTIONS:
-        --architecture <arch>                   Target architecture
-        --imagebase <image_base>                Use VALUE as image base
-    -l, --max-gadget-len <max_gadget_length>    Maximum size of a gadget [default: 16]
-        --os <os>                               Target OS
-    -o, --output-file <output_file>             Write all gadgets into file
-    -t, --nb-threads <thread_num>               The number of threads for processing the binary [default: 2]
+          [default: 2]
+
+  -o, --output-file <OUTPUT>
+          Write gadget to file (optional)
+
+  -v, --verbose...
+          The verbosity level
+
+  -u, --unique
+          Unique gadgets
+
+      --architecture <ARCHITECTURE>
+          Force the architecture to given value
+
+          [possible values: x86, x64, arm, arm64]
+
+      --format <FORMAT>
+          Force the OS to given value
+
+          [possible values: pe, elf, mach]
+
+  -i, --image-base <IMAGE_BASE>
+          Specify an image base
+
+          [default: 0]
+
+      --no-color
+          Unique gadgets
+
+      --max-insn-per-gadget <MAX_INSN_PER_GADGET>
+          The maximum number of instructions in a gadget
+
+          [default: 6]
+
+      --max-size <MAX_SIZE>
+          The maximum size of the gadget
+
+          [default: 32]
+
+      --rop-types <ROP_TYPES>
+          The type of gadgets to focus on (default - return only)
+
+          [possible values: jump, call, ret, int, iret, privileged]
+
+      --profile-type <PROFILE_TYPE>
+          The profile type (default - fast)
+
+          [default: fast]
+
+          Possible values:
+          - fast:     Strategy Fast
+          - complete: Strategy Complete
+
+  -h, --help
+          Print help information (use `-h` for a summary)
+
+  -V, --version
+          Print version information
 ```
 
 
@@ -46,22 +99,29 @@ OPTIONS:
 
 If you don't have `cargo`:
 
+ - On Linux/MacOS
 ```bash
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+ - On Windows
+```bash
+Invoke-WebRequest https://win.rustup.rs/x86_64 -UseBasicParsing -OutFile "rustup-init.exe"
+iex rustup-init.exe
 ```
 
 Then build:
 
 ```bash
-$ git clone https://github.com/hugsy/ropgadget-rs
-$ cd ropgadget-rs
-$ cargo build
+git clone https://github.com/hugsy/ropgadget-rs
+cd ropgadget-rs
+cargo build
 ```
 
 And run:
 
 ```bash
-$ cargo run -- --help
+cargo run -- --help
 ```
 
 
@@ -105,8 +165,8 @@ PS C:\Users\hugsy> .\ropgadget-rs.exe -o rop.txt -vv .\msedge.dll
 
 YMMV but most small files (like Unix binaries) will execute in way under 1 second.
 
-```bash
-wsl@ph0ny:/mnt/d/Code/ropgadget-rs/target/release$ ./ropgadget-rs -vv -o /dev/null /bin/ls
+```text
+$ ./ropgadget-rs -vv -o /dev/null /bin/ls
 [INFO] - Checking file '/bin/ls'
 [INFO] - Creating new Session(file=/bin/ls, Info(Arch=x86-64, OS=ELF))
 [INFO] - Looking for gadgets in 5 sections (with 2 threads)...'
@@ -116,14 +176,10 @@ wsl@ph0ny:/mnt/d/Code/ropgadget-rs/target/release$ ./ropgadget-rs -vv -o /dev/nu
 ```
 
 
-## Improvements to come
-
- * Handle multiple binaries
- * Generate complete ROP sequence (`execve`, `Virtual{Alloc,Protect}`, that kind)
-
 ## Better projects
 
 Unless you're ok with experiencing my bugs, you should probably check out one of those projects:
  - [rp++](https://github.com/0vercl0k/rp)
  - [ropper](https://github.com/sashs/ropper)
  - [RopGadget](https://github.com/JonathanSalwan/ROPgadget)
+
