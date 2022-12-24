@@ -49,29 +49,33 @@ fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
         }
     }
 
-    //
-    // sort by address
-    //
     let mut gadgets = arc.gadgets.lock().unwrap();
-    gadgets.sort_by(|a, b| a.address.cmp(&b.address));
-
-    total_gadgets_found = gadgets.len();
 
     //
     // if unique, filter out doublons
     //
+    total_gadgets_found = gadgets.len();
     if unique_only {
         debug!(
             "Filtering {} gadgets for deplicates ...",
             total_gadgets_found
         );
-        gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(&b.text(false)));
+        gadgets.sort_by(|a, b| a.text(false).cmp(&b.text(false)));
+        gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(b.text(false).as_str()));
         info!(
             "{} duplicate gadgets removed",
             total_gadgets_found - gadgets.len()
         );
     }
 
+    //
+    // sort by address
+    //
+    gadgets.sort_by(|a, b| a.address.cmp(&b.address));
+
+    //
+    // Write to stdout or file
+    //
     if let Some(filename) = outfile {
         info!(
             "Dumping {} gadgets to '{}'...",
