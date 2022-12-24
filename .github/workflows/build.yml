@@ -67,16 +67,16 @@ jobs:
         if: ${{ matrix.job.os != 'windows-latest' }}
         run: |
           case ${{ matrix.job.use-cross }} in
-            true) cargo install cross; cross build --locked --release --target=${{ matrix.job.target }} ;;
-            false) cargo build --locked --release --target=${{ matrix.job.target }} ;;
+            true) cargo install cross; cross build --release --target=${{ matrix.job.target }} ;;
+            false) cargo build --release --target=${{ matrix.job.target }} ;;
             *) echo "Unknown ${{ matrix.job.use-cross }}"; exit 1 ;;
           esac
-          
+
       - name: Build (Windows)
         if: ${{ matrix.job.os == 'windows-latest' }}
         run: |
-          cargo build --locked --release --target=${{ matrix.job.target }}
-          
+          cargo build --release --target=${{ matrix.job.target }}
+
       - name: Prepare artifact
         shell: bash
         run: |
