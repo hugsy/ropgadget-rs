@@ -1,11 +1,11 @@
 [package]
-name = "rp-rs"
+name = "ropgadget-rs"
 version = "0.3.0"
 authors = ["hugsy <hugsy@blah.cat>"]
 edition = "2018"
 description = "Another (bad) ROP gadget finder"
-homepage = "https://github.com/hugsy/rp-rs/"
-repository = "https://github.com/hugsy/rp-rs/"
+homepage = "https://github.com/hugsy/ropgadget-rs/"
+repository = "https://github.com/hugsy/ropgadget-rs/"
 readme = "README.md"
 license = "MIT"
 keywords = ["pwn", "ctf", "x64", "x86", "arm", "arm64"]
