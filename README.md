@@ -10,12 +10,12 @@ You've been warned, don't blame me...
 
 Currently supports:
 
-|      | ELF | PE | Mach  |
-|:-----:|:---:|:--:|:----:|
-| x86   | ✅ | ✅ | ❌   |
-| x64   | ✅ | ✅ | ✅   |
-| arm   | ✅ | ✅ | ❌   |
-| arm64 | ✅ | ✅ | ❌   |
+|       |  ELF  |  PE   | Mach  |
+| :---: | :---: | :---: | :---: |
+|  x86  |   ✅   |   ✅   |   ✅   |
+|  x64  |   ✅   |   ✅   |   ✅   |
+|  arm  |   ✅   |   ✅   |   ❌   |
+| arm64 |   ✅   |   ✅   |   ❌   |
 
 
 ## ropgadget-rs

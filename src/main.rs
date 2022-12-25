@@ -186,8 +186,9 @@ mod tests {
 
         #[test]
         fn arm32() {
-            assert!(test_one("small", "arm32", FMT));
-            assert!(test_one("big", "arm32", FMT));
+            for sz in vec!["small", "big"] {
+                assert!(test_one(sz, "arm32", FMT));
+            }
         }
 
         #[test]
