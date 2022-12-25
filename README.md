@@ -61,7 +61,7 @@ Options:
           [default: 0]
 
       --no-color
-          Unique gadgets
+          Disable colors
 
       --max-insn-per-gadget <MAX_INSN_PER_GADGET>
           The maximum number of instructions in a gadget
@@ -107,7 +107,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
  - On Windows
 ```bash
 Invoke-WebRequest https://win.rustup.rs/x86_64 -UseBasicParsing -OutFile "rustup-init.exe"
-iex rustup-init.exe
+Invoke-Expression rustup-init.exe
 ```
 
 Then build:
