@@ -62,7 +62,7 @@ pub struct Args {
     #[arg(short, long, default_value_t = 0)]
     image_base: u32,
 
-    /// Unique gadgets
+    /// Disable colors on output. This option is forced on when writing to file.
     #[arg(long)]
     no_color: bool,
 
