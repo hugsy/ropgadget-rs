@@ -1,11 +1,18 @@
+<p align="center">
+  <img src="https://i.imgur.com/zjcxyVf.png" alt="logo" width="300px"/>
+</p>
+
 # ropgadget-rs
 
-[![CI Build](https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml)
+<p align="center">
+    <a href="https://discord.gg/hSbqxxBgRX"><img alt="Discord" src="https://img.shields.io/badge/Discord-BlahCats-yellow"></a>
+    <a href="https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml"><img src="https://github.com/hugsy/ropgadget-rs/actions/workflows/build.yml/badge.svg?branch=main"/></a>
+</p>
 
-## Why another ROP gadget finder?
 
-RopGadget-rs is an attempt to learn Rust as a weekend project, to try and get a really fast & easily portable ropgadget finder even (especially!) for large binaries (ntoskrnl, chrome, etc.). As a result it is barely functional, and the code is probably ugly and inefficient.
+RopGadget-rs started as a weekend project to learn [Rust](https://www.rust-lang.org/). But as usual it also started from the need to get really fast & easily portable ropgadget finder capable of handling quickly any binary (especially very large ones such as mshtml, ntoskrnl, chrome, etc.).
 
+It works ok for me, but don't make any claim on performance.
 You've been warned, don't blame me...
 
 Currently supports:
@@ -20,7 +27,7 @@ Currently supports:
 
 ## ropgadget-rs
 
-```text
+```console
 ❯ .\ropgadget-rs.exe --help
 Another (bad) ROP gadget finder
 
