@@ -1,6 +1,6 @@
 [package]
 name = "ropgadget-rs"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["hugsy <hugsy@blah.cat>"]
 edition = "2018"
 description = "Another (bad) ROP gadget finder"
@@ -11,9 +11,9 @@ license = "MIT"
 keywords = ["pwn", "ctf", "x64", "x86", "arm", "arm64"]
 
 [dependencies]
-goblin = "0.6.0"
+goblin = "0.8.0"
 capstone = "0.11.0"
 clap = { version = "4.0.29", features = ["derive"] }
 colored = "2"
-bitflags = "1.2.1"
-log = {version = "0.4.11", features = ["std",]}
+bitflags = "2.4.2"
+log = { version = "0.4.11", features = ["std"] }

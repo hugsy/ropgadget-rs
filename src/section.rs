@@ -1,13 +1,14 @@
 use std::fmt;
 
 bitflags! {
+    #[derive(Debug)]
     pub struct Permission: u8
     {
         const NONE = 0;
         const READABLE = 1;
         const WRITABLE = 2;
         const EXECUTABLE = 4;
-        const ALL = Self::READABLE.bits | Self::WRITABLE.bits | Self::EXECUTABLE.bits;
+        const ALL = Self::READABLE.bits() | Self::WRITABLE.bits() | Self::EXECUTABLE.bits();
     }
 }
 

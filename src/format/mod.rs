@@ -64,5 +64,6 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableForm
         Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
         Object::Archive(_) => Err(Error::InvalidFileError),
         Object::Unknown(_) => Err(Error::InvalidFileError),
+        _ => panic!(),
     }
 }
