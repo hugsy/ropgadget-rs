@@ -1,7 +1,10 @@
-name: CI Build
+name: Build
 
 on:
   push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
 
 env:
@@ -31,12 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Inject slug/short variables
-        uses: rlespinasse/github-slug-action@v4
+        uses: actions/checkout@v4.1.1
 
       - name: Install prerequisites
         shell: bash
@@ -86,51 +84,46 @@ jobs:
           cargo build --release --lib
           cargo build --release --target=${{ matrix.job.target }} --example rp-rs
 
-      - name: Prepare artifact
-        shell: bash
-        run: |
-          mkdir build
-          # cargo install --path . --root build
 
       - name: Publish artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.3.1
         with:
-          name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ env.GITHUB_SHA_SHORT }}
-          path: target/
+          name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ github.sha }}
+          path: |
+            target/debug/examples/rp-rs*
+            target/debug/libropgadget_rs.*
+            target/release/examples/rp-rs*
+            target/release/libropgadget_rs.*
 
   notify:
-    runs-on: 'ubuntu-22.04'
+    runs-on: ubuntu-latest
     needs: build
     steps:
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
     - name: Send Discord notification
       env:
-        COMMIT_URL: "https://github.com/${{ env.REPO }}/commit/${{ env.GITHUB_SHA_SHORT }}"
+        COMMIT_URL: "https://github.com/${{ env.REPO }}/commit/${{ github.sha }}"
         RUN_URL: "https://github.com/${{ env.REPO }}/actions/runs/${{ github.run_id }}"
-        BRANCH_URL: "https://github.com/${{ env.REPO }}/tree/${{ env.GITHUB_REF_SLUG }}"
+        BRANCH_URL: "https://github.com/${{ env.REPO }}/tree/${{ github.ref_name }}"
         AUTHOR_URL: "https://github.com/${{ github.actor }}"
       uses: sarisia/actions-status-discord@v1.10.0
       with:
         nodetail: true
-        title: 🚧 Build `${{ env.GITHUB_SHA_SHORT }}` for `${{ env.REPO }}` 🚧
+        title: 🚧 Build `${{ github.sha }}` for `${{ env.REPO }}` 🚧
         description: |
-          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ env.GITHUB_SHA_SHORT }}` initiated by [${{ github.actor }}](${{ env.AUTHOR_URL }}):
-          ● Commit [${{ env.GITHUB_SHA_SHORT }}](${{ env.COMMIT_URL }})
-          ● Branch [`${{ env.GITHUB_REF_SLUG }}`](${{ env.BRANCH_URL }})
+          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ github.sha }}` initiated by [${{ github.actor }}](${{ env.AUTHOR_URL }}):
+          ● Commit [${{ github.sha }}](${{ env.COMMIT_URL }})
+          ● Branch [`${{ github.ref_name }}`](${{ env.BRANCH_URL }})
           ● [Detail Page](${{ env.RUN_URL }})
         color: 0x0000ff
         username: ${{ github.actor }} via GithubBot
         avatar_url: ${{ github.actor.avatar_url }}
 
   test:
-    runs-on: 'ubuntu-22.04'
+    runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
+        uses: actions/checkout@v4.1.1
 
       - name: cargo check
         run: cargo check
