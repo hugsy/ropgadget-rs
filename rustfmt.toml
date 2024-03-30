@@ -1,0 +1,12 @@
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"
+
+normalize_comments = true
+normalize_doc_attributes = true
+overflow_delimited_expr = true
+reorder_impl_items = true
+reorder_imports = true
+reorder_modules = true
+unstable_features = true
+use_field_init_shorthand = true
+wrap_comments = true

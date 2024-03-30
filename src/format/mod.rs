@@ -4,25 +4,27 @@ pub mod pe;
 
 use std::{fs, path::PathBuf};
 
-use crate::{common::GenericResult, cpu, error::Error, section::Section};
+use crate::{common::GenericResult, cpu::CpuType, error::Error, section::Section};
 
 use clap::ValueEnum;
 use goblin::Object;
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum Format {
+pub enum FileFormat {
+    Auto,
     Pe,
     Elf,
-    Mach,
+    MachO,
     // todo: Raw,
 }
 
-impl std::fmt::Display for Format {
+impl std::fmt::Display for FileFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let val = match self {
-            Format::Pe => "PE",
-            Format::Elf => "ELF",
-            Format::Mach => "Mach",
+            FileFormat::Pe => "PE",
+            FileFormat::Elf => "ELF",
+            FileFormat::MachO => "MachO",
+            _ => panic!("Invalid FileFormat"),
         };
 
         write!(f, "BinaryFormat={}", val)
@@ -30,20 +32,22 @@ impl std::fmt::Display for Format {
 }
 
 /// Trait specific to executable files
-pub trait ExecutableFormat: Send + Sync {
+pub trait ExecutableFileFormat: Send + Sync {
     fn path(&self) -> &PathBuf;
 
-    fn format(&self) -> Format;
+    fn format(&self) -> FileFormat;
 
     fn sections(&self) -> &Vec<Section>;
 
-    fn cpu(&self) -> &dyn cpu::Cpu;
+    // fn cpu(&self) -> &dyn cpu::Cpu;
+
+    fn cpu_type(&self) -> CpuType;
 
     fn entry_point(&self) -> u64;
 }
 
 /// Attempt to determine the file
-pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableFormat>> {
+pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableFileFormat>> {
     if !file.as_path().exists() {
         return Err(Error::InvalidFileError);
     }
@@ -59,7 +63,7 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableForm
     };
 
     match parsed {
-        Object::PE(obj) => Ok(Box::new(pe::Pe::new(file.to_path_buf(), obj))),
+        Object::PE(obj) => Ok(Box::new(pe::Pe::from(obj))),
         Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
         Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
         Object::Archive(_) => Err(Error::InvalidFileError),

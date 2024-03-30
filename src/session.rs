@@ -1,11 +1,13 @@
+use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{default, thread};
 
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::ValueEnum;
 use colored::*;
 use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
 
+use crate::common::GenericResult;
 use crate::cpu;
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 use crate::format::{self, guess_file_format};
@@ -13,8 +15,9 @@ use crate::gadget::{
     find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
 };
 
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
 pub enum RopProfileStrategy {
+    #[default]
     /// Strategy Fast
     Fast,
     /// Strategy Complete
@@ -27,68 +30,13 @@ impl std::fmt::Display for RopProfileStrategy {
     }
 }
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about)] // Read from `Cargo.toml`
-pub struct Args {
-    /// The file to parse
-    #[arg(value_name = "FILE")]
-    filepath: PathBuf,
-
-    /// The number of threads to use
-    #[arg(short, long = "number-of-threads", default_value_t = 2)]
-    thread_num: u8,
-
-    /// Write gadget to file (optional)
-    #[arg(short, long = "output-file", value_name = "OUTPUT")]
-    output_file: Option<PathBuf>,
-
-    /// The verbosity level
-    #[arg(short, long = "verbose", action = clap::ArgAction::Count)]
-    verbosity: u8,
-
-    /// Unique gadgets
-    #[arg(short, long, action = ArgAction::SetTrue)]
-    unique: bool,
-
-    /// Force the architecture to given value
-    #[arg(long, value_enum)]
-    architecture: Option<cpu::CpuType>,
-
-    /// Force the OS to given value
-    #[arg(long, value_enum)]
-    format: Option<format::Format>,
-
-    /// Specify an image base
-    #[arg(short, long, default_value_t = 0)]
-    image_base: u32,
-
-    /// Disable colors on output. This option is forced on when writing to file.
-    #[arg(long)]
-    no_color: bool,
-
-    /// The maximum number of instructions in a gadget
-    #[arg(long, default_value_t = 6)]
-    max_insn_per_gadget: u8,
-
-    /// The maximum size of the gadget
-    #[arg(long, default_value_t = 32)]
-    max_size: u8,
-
-    /// The type of gadgets to focus on (default - return only)
-    #[arg(long, value_enum)]
-    rop_types: Vec<InstructionGroup>,
-
-    /// The profile type (default - fast)
-    #[arg(long, value_enum, default_value_t = RopProfileStrategy::Fast)]
-    profile_type: RopProfileStrategy,
-}
-
-pub struct ExecutableDetail {
-    pub format: Box<dyn format::ExecutableFormat>,
+pub struct ExecutableDetails {
+    pub filepath: PathBuf,
+    pub format: Box<dyn format::ExecutableFileFormat>,
     pub cpu: Box<dyn cpu::Cpu>,
 }
 
-impl std::fmt::Display for ExecutableDetail {
+impl std::fmt::Display for ExecutableDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -100,32 +48,48 @@ impl std::fmt::Display for ExecutableDetail {
     }
 }
 
-impl ExecutableDetail {
-    pub fn new(filepath: &PathBuf, binfmt: Option<format::Format>) -> Self {
-        let format = guess_file_format(&filepath).unwrap();
-        let cpu_type = format.cpu().cpu_type();
-        let cpu: Box<dyn cpu::Cpu> = match cpu_type {
+impl Default for ExecutableDetails {
+    fn default() -> Self {
+        ExecutableDetails {
+            filepath: PathBuf::new(),
+            cpu: Box::new(cpu::x86::X86 {}),
+            format: Box::new(format::pe::Pe::default()),
+        }
+    }
+}
+
+impl ExecutableDetails {
+    pub fn new(filepath: PathBuf) -> Self {
+        let fpath = filepath.clone();
+        let format = guess_file_format(&fpath).unwrap();
+
+        let cpu: Box<dyn cpu::Cpu> = match format.cpu_type() {
             cpu::CpuType::X86 => Box::new(cpu::x86::X86 {}),
             cpu::CpuType::X64 => Box::new(cpu::x86::X64 {}),
             cpu::CpuType::ARM64 => Box::new(cpu::arm::Arm64 {}),
             cpu::CpuType::ARM => Box::new(cpu::arm::Arm {}),
+            _ => panic!("CPU type is invalid"),
         };
+        // let cpu = Box::new( Cpu::from(format.cpu_type()) );
 
-        let check_format = match binfmt {
-            Some(fmt) => fmt == format.format(),
-            _ => true,
-        };
-
-        if !check_format {
-            panic!("A binary format was specify, but doesn't match the given file...")
+        ExecutableDetails {
+            filepath: fpath,
+            cpu,
+            format,
         }
-
-        ExecutableDetail { cpu, format }
     }
 
     pub fn is_64b(&self) -> bool {
         self.cpu.ptrsize() == 8
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum RopGadgetOutput {
+    #[default]
+    None,
+    Console,
+    File(PathBuf),
 }
 
 struct RpLogger;
@@ -154,19 +118,21 @@ impl log::Log for RpLogger {
 
 static LOGGER: RpLogger = RpLogger;
 
+// #[derive(Default)]
 pub struct Session {
     //
     // session required information
     //
-    pub filepath: PathBuf,
-    pub nb_thread: u32,
+    pub info: ExecutableDetails,
+    pub nb_thread: u8,
     pub verbosity: LevelFilter,
-    pub output_file: Option<PathBuf>,
+    pub output: RopGadgetOutput,
 
     //
     // misc details about the executable file (filled by )
     //
-    pub info: ExecutableDetail,
+
+    // pub file_format: format::FileFormat,
 
     //
     // the info need to build, store and show the ropgadgets
@@ -181,44 +147,58 @@ pub struct Session {
 }
 
 impl Session {
-    //
-    // Build session parameters
-    //
-    pub fn new() -> Self {
-        let args = Args::parse();
-
-        let verbosity = match args.verbosity {
-            4 => LevelFilter::Trace, // -vvvv
-            3 => LevelFilter::Debug, // -vvv
-            2 => LevelFilter::Info,  // -vv
-            1 => LevelFilter::Warn,  // -v
-            _ => LevelFilter::Error,
-        };
-
-        log::set_logger(&LOGGER)
-            .map(|()| log::set_max_level(verbosity))
-            .unwrap();
-
-        let info = ExecutableDetail::new(&args.filepath, args.format);
-
-        let gadget_types = match args.rop_types.len() {
-            0 => vec![InstructionGroup::Ret],
-            _ => args.rop_types.clone(),
-        };
-
+    pub fn new(filepath: PathBuf) -> Self {
         Session {
-            filepath: args.filepath,
-            nb_thread: args.thread_num.into(),
-            output_file: args.output_file,
-            unique_only: args.unique,
-            use_color: !args.no_color,
-            max_gadget_length: args.max_insn_per_gadget.into(),
-            gadget_types: gadget_types,
-            profile_type: args.profile_type,
-            verbosity: verbosity,
-            info: info,
+            info: ExecutableDetails::new(filepath),
+            ..Default::default()
+        }
+    }
+
+    pub fn nb_thread(self, nb_thread: u8) -> Self {
+        Self { nb_thread, ..self }
+    }
+
+    pub fn output(self, new_output: RopGadgetOutput) -> Self {
+        Self {
+            output: new_output,
+            ..self
+        }
+    }
+
+    pub fn unique_only(self, unique_only: bool) -> Self {
+        Self {
+            unique_only,
+            ..self
+        }
+    }
+
+    pub fn use_color(self, use_color: bool) -> Self {
+        Self { use_color, ..self }
+    }
+
+    pub fn verbosity(self, verbosity: LevelFilter) -> Self {
+        Self { verbosity, ..self }
+    }
+
+    pub fn filepath(&self) -> &PathBuf {
+        &self.info.filepath
+    }
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Session {
+            verbosity: LevelFilter::Off,
+            nb_thread: 4,
+            output: RopGadgetOutput::None,
+            unique_only: true,
+            use_color: true,
+            max_gadget_length: 6,
+            gadget_types: vec![InstructionGroup::Ret],
+            profile_type: RopProfileStrategy::Fast,
             gadgets: Mutex::new(Vec::new()),
             engine_type: DisassemblyEngineType::Capstone,
+            info: ExecutableDetails::default(),
         }
     }
 }
@@ -226,7 +206,7 @@ impl Session {
 impl std::fmt::Debug for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Session")
-            .field("path", &self.filepath)
+            .field("path", &self.filepath())
             .field("format", &self.info.format.format().to_string())
             .field("cpu", &self.info.cpu.cpu_type().to_string())
             .finish()
@@ -239,7 +219,7 @@ impl std::fmt::Display for Session {
         write!(
             f,
             "Session(File='{}', {}, Profile={}, GadgetTypes=[{}])",
-            self.filepath.to_str().unwrap(),
+            self.filepath().to_str().unwrap(),
             self.info,
             self.profile_type.to_string(),
             gadget_types.join(", "),
@@ -251,8 +231,9 @@ impl std::fmt::Display for Session {
 // find all the gadgets in the different sections in parallel
 // returns true if no error occured
 //
-pub fn find_gadgets(session: Arc<Session>) -> bool {
-    let number_of_sections = session.info.format.sections().len();
+pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
+    let info = &session.info;
+    let number_of_sections = info.format.sections().len();
     let nb_thread = session.nb_thread.clone() as usize;
 
     debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
@@ -261,11 +242,11 @@ pub fn find_gadgets(session: Arc<Session>) -> bool {
     // multithread parsing of each section
     //
     for section_idx in 0..number_of_sections {
-        if session.info.format.sections().get(section_idx).is_none() {
+        if info.format.sections().get(section_idx).is_none() {
             continue;
         }
 
-        let section = session.info.format.sections().get(section_idx).unwrap();
+        let section = info.format.sections().get(section_idx).unwrap();
         let chunk_size = section.data.len() / nb_thread;
 
         //
@@ -327,7 +308,7 @@ pub fn find_gadgets(session: Arc<Session>) -> bool {
         "Total gadgets found => {}",
         session.gadgets.lock().unwrap().len()
     );
-    true
+    Ok(())
 }
 
 fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadget> {
@@ -343,10 +324,16 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
     let mut gadgets: Vec<Gadget> = Vec::new();
     let sections = session.info.format.sections();
     if let Some(section) = sections.get(index) {
+        let section_name = section
+            .name
+            .as_ref()
+            .unwrap_or(String::from("N/A").borrow())
+            .clone();
+
         debug!(
             "{:?}: Processing section '{}'",
             thread::current().id(),
-            section.name
+            section_name
         );
 
         let cpu = &session.info.cpu;
@@ -358,10 +345,10 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
             debug!(
                 "{:?}: Processing Section {}[..{:x}+{:x}] (size={:x})",
                 thread::current().id(),
-                section.name,
+                section_name,
                 pos,
                 len,
-                section.size,
+                section.size(),
             );
 
             let res = find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu);
@@ -374,7 +361,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
         debug!(
             "{:?}: Finished processing section '{}'",
             thread::current().id(),
-            section.name
+            section_name,
         );
     } else {
         warn!(

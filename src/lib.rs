@@ -1,36 +1,35 @@
 #[macro_use]
 extern crate bitflags;
 
-use std::io::prelude::*;
+use colored::Colorize;
+use std::io::Write as _;
+use std::sync::Arc;
 use std::{fs, path::PathBuf};
 
-use std::sync::Arc;
+use log::{debug, error, info, warn};
 
-use colored::*;
-use gadget::InstructionGroup;
-use log::{debug, error, info, warn, LevelFilter};
+pub mod common;
+pub mod cpu;
+pub mod engine;
+pub mod error;
+pub mod format;
+pub mod gadget;
+pub mod section;
+pub mod session;
 
-mod common;
-mod cpu;
-mod engine;
-mod error;
-mod format;
-mod gadget;
-mod section;
-mod session;
+use crate::common::GenericResult;
+use crate::session::Session;
 
-use common::GenericResult;
-use session::{RopProfileStrategy, Session};
-
-fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
+pub fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
+    let info = &sess.info;
     let start_timestamp = std::time::Instant::now();
-    let sections = sess.info.format.sections();
+    let sections = info.format.sections();
     let total_gadgets_found: usize;
     let use_color = sess.use_color.clone();
     let unique_only = sess.unique_only.clone();
-    let outfile = sess.output_file.clone();
-    let entrypoint_address = sess.info.format.entry_point().clone();
-    let is_64b = sess.info.is_64b();
+    let _output = sess.output.clone();
+    let entrypoint_address = info.format.entry_point().clone();
+    let is_64b = info.is_64b();
 
     //
     // the real meat of the tool
@@ -42,11 +41,10 @@ fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
     );
 
     let arc = Arc::new(sess);
-    {
-        if !session::find_gadgets(arc.clone()) {
-            error!("An error occured in `find_gadgets'");
-            return Ok(());
-        }
+    let res = session::find_gadgets(arc.clone());
+    if res.is_err() {
+        error!("An error occured while collecting gadgets");
+        return res;
     }
 
     let mut gadgets = arc.gadgets.lock().unwrap();
@@ -74,41 +72,49 @@ fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
     gadgets.sort_by(|a, b| a.address.cmp(&b.address));
 
     //
-    // Write to stdout or file
+    // Write to given output
     //
-    if let Some(filename) = outfile {
-        info!(
-            "Dumping {} gadgets to '{}'...",
-            gadgets.len(),
-            filename.to_str().unwrap()
-        );
-        if use_color {
-            warn!("Disabling colors when writing to file");
+    match _output {
+        session::RopGadgetOutput::None => {
+            warn!("No output specified");
         }
 
-        let mut file = fs::File::create(filename)?;
-        for g in &*gadgets {
-            let txt = g.text(false);
-            let addr = entrypoint_address + g.address;
-            file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
+        session::RopGadgetOutput::Console => {
+            info!("Dumping {} gadgets to stdout...", gadgets.len());
+
+            for g in &*gadgets {
+                let addr = match is_64b {
+                    true => {
+                        format!("0x{:016x}", g.address)
+                    }
+                    _ => {
+                        format!("0x{:08x}", g.address)
+                    }
+                };
+
+                if use_color {
+                    println!("{} | {}", addr.red(), g.text(use_color));
+                } else {
+                    println!("{} | {}", addr, g.text(use_color));
+                }
+            }
         }
-    } else {
-        info!("Dumping {} gadgets to stdout...", gadgets.len());
 
-        for g in &*gadgets {
-            let addr = match is_64b {
-                true => {
-                    format!("0x{:016x}", g.address)
-                }
-                _ => {
-                    format!("0x{:08x}", g.address)
-                }
-            };
-
+        session::RopGadgetOutput::File(filename) => {
+            info!(
+                "Dumping {} gadgets to '{}'...",
+                gadgets.len(),
+                filename.to_str().unwrap()
+            );
             if use_color {
-                println!("{} | {}", addr.red(), g.text(use_color));
-            } else {
-                println!("{} | {}", addr, g.text(use_color));
+                warn!("Disabling colors when writing to file");
+            }
+
+            let mut file = fs::File::create(filename)?;
+            for g in &*gadgets {
+                let txt = g.text(false);
+                let addr = entrypoint_address + g.address;
+                file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
             }
         }
     }
@@ -129,38 +135,33 @@ fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
     Ok(())
 }
 
-fn main() -> GenericResult<()> {
-    let sess = Session::new();
-    info!("Created session: {}", sess);
-
-    collect_all_gadgets(sess)
-}
-
 fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
     #![allow(dead_code)]
     let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
-    let mut output_fname = std::env::temp_dir();
-    output_fname.push(format!("rop-{}-{}.{}", sz, arch, fmt));
-    let s = Session {
-        filepath: input_fname.clone(),
-        nb_thread: 2,
-        output_file: Some(output_fname.clone()),
-        unique_only: true,
-        use_color: false,
-        max_gadget_length: 16,
-        gadget_types: vec![InstructionGroup::Ret],
-        profile_type: RopProfileStrategy::Fast,
-        verbosity: LevelFilter::Debug,
-        info: session::ExecutableDetail::new(&input_fname, None),
-        gadgets: std::sync::Mutex::new(Vec::new()),
-        engine_type: engine::DisassemblyEngineType::Capstone,
-    };
+    // let mut output_fname = std::env::temp_dir();
+    // output_fname.push(format!("rop-{}-{}.{}", sz, arch, fmt));
+    // let s = Session {
+    //     filepath: input_fname.clone(),
+    //     nb_thread: 2,
+    //     output: RopGadgetOutput::Console,
+    //     unique_only: true,
+    //     use_color: false,
+    //     max_gadget_length: 16,
+    //     gadget_types: vec![InstructionGroup::Ret],
+    //     profile_type: RopProfileStrategy::Fast,
+    //     verbosity: LevelFilter::Debug,
+    //     gadgets: std::sync::Mutex::new(Vec::new()),
+    //     engine_type: engine::DisassemblyEngineType::Capstone,
+    //     ..Default::default()
+    // };
 
-    let res = collect_all_gadgets(s).is_ok();
+    let s = Session::new(input_fname);
 
-    fs::remove_file(output_fname.as_path()).unwrap();
+    collect_all_gadgets(s).is_ok()
 
-    res
+    // fs::remove_file(output_fname.as_path()).unwrap();
+
+    // res
 }
 
 #[cfg(test)]

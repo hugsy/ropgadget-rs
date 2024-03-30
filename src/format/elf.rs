@@ -6,15 +6,16 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use crate::cpu;
-use crate::{format::Format, section::Section};
+use crate::{format::FileFormat, section::Section};
 
-use super::ExecutableFormat;
+use super::ExecutableFileFormat;
 
 #[derive(Debug)]
 pub struct Elf {
     path: PathBuf,
     sections: Vec<Section>,
-    cpu: Box<dyn cpu::Cpu>,
+    // cpu: Box<dyn cpu::Cpu>,
+    cpu_type: cpu::CpuType,
     entry_point: u64,
 }
 
@@ -41,12 +42,13 @@ impl Elf {
             debug!("Importing section {:?}", s);
 
             let mut section = Section::from(s);
-            section.name = String::from(&obj.shdr_strtab[s.sh_name]);
+            section.name = Some(String::from(&obj.shdr_strtab[s.sh_name]));
 
             if reader.seek(SeekFrom::Start(s.sh_addr as u64)).is_err() {
                 panic!(
                     "Invalid offset {} for section '{}', corrupted ELF?",
-                    s.sh_addr, section.name
+                    s.sh_addr,
+                    section.name.unwrap_or_default()
                 )
             }
 
@@ -54,15 +56,19 @@ impl Elf {
                 Ok(_) => {
                     executable_sections.push(section);
                 }
-                Err(e) => panic!("Failed to read '{}' section: {:?}", section.name, e),
+                Err(e) => panic!(
+                    "Failed to read '{}' section: {:?}",
+                    section.name.unwrap_or_default(),
+                    e
+                ),
             };
         }
 
-        let cpu: Box<dyn cpu::Cpu> = match obj.header.e_machine {
-            goblin::elf::header::EM_386 => Box::new(cpu::x86::X86 {}),
-            goblin::elf::header::EM_X86_64 => Box::new(cpu::x86::X64 {}),
-            goblin::elf::header::EM_ARM => Box::new(cpu::arm::Arm {}),
-            goblin::elf::header::EM_AARCH64 => Box::new(cpu::arm::Arm {}),
+        let cpu_type = match obj.header.e_machine {
+            goblin::elf::header::EM_386 => cpu::CpuType::X86,
+            goblin::elf::header::EM_X86_64 => cpu::CpuType::X64,
+            goblin::elf::header::EM_ARM => cpu::CpuType::ARM,
+            goblin::elf::header::EM_AARCH64 => cpu::CpuType::ARM64,
             _ => {
                 panic!("ELF machine format is unsupported")
             }
@@ -71,27 +77,31 @@ impl Elf {
         Self {
             path: path.clone(),
             sections: executable_sections,
-            cpu: cpu,
+            cpu_type,
             entry_point: obj.entry,
         }
     }
 }
 
-impl ExecutableFormat for Elf {
+impl ExecutableFileFormat for Elf {
     fn path(&self) -> &PathBuf {
         &self.path
     }
 
-    fn format(&self) -> Format {
-        Format::Elf
+    fn format(&self) -> FileFormat {
+        FileFormat::Elf
     }
 
     fn sections(&self) -> &Vec<Section> {
         &self.sections
     }
 
-    fn cpu(&self) -> &dyn cpu::Cpu {
-        self.cpu.as_ref()
+    // fn cpu(&self) -> &dyn cpu::Cpu {
+    //     self.cpu.as_ref()
+    // }
+
+    fn cpu_type(&self) -> cpu::CpuType {
+        self.cpu_type
     }
 
     fn entry_point(&self) -> u64 {

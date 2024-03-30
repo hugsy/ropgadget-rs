@@ -5,6 +5,7 @@ use clap::ValueEnum;
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum CpuType {
+    Unknown,
     X86,
     X64,
     ARM,
@@ -36,8 +37,15 @@ impl std::fmt::Display for CpuType {
             CpuType::X64 => "x86-64",
             CpuType::ARM => "ARM",
             CpuType::ARM64 => "ARM64",
+            CpuType::Unknown => "Unknown",
         };
 
         write!(f, "Arch={}", val)
+    }
+}
+
+impl Default for CpuType {
+    fn default() -> Self {
+        CpuType::Unknown
     }
 }

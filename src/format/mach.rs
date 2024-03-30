@@ -8,23 +8,21 @@ use goblin::mach::constants;
 use log::debug;
 
 use crate::cpu;
-use crate::{format::Format, section::Permission, section::Section};
+use crate::{format::FileFormat, section::Permission, section::Section};
 
-use super::ExecutableFormat;
+use super::ExecutableFileFormat;
 
 pub struct Mach {
     path: PathBuf,
     sections: Vec<Section>,
-    cpu: Box<dyn cpu::Cpu>,
+    cpu_type: cpu::CpuType,
     entry_point: u64,
 }
 impl Mach {
     pub fn new(path: PathBuf, obj: goblin::mach::Mach) -> Self {
         let bin = match obj {
-            goblin::mach::Mach::Fat(_) => {
-                todo!()
-            }
             goblin::mach::Mach::Binary(macho) => macho,
+            goblin::mach::Mach::Fat(_) => todo!(),
         };
 
         let filepath = path.to_str().unwrap();
@@ -53,7 +51,7 @@ impl Mach {
 
             let mut section = Section::new(s.vmaddr as u64, (s.vmaddr + s.vmsize - 1) as u64);
 
-            section.name = section_name;
+            section.name = Some(section_name);
 
             let perm = Permission::EXECUTABLE | Permission::READABLE; // todo: fix later
             section.permission = perm;
@@ -66,11 +64,11 @@ impl Mach {
             sections.push(section);
         }
 
-        let cpu: Box<dyn cpu::Cpu> = match bin.header.cputype {
-            constants::cputype::CPU_TYPE_X86 => Box::new(cpu::x86::X86 {}),
-            constants::cputype::CPU_TYPE_X86_64 => Box::new(cpu::x86::X64 {}),
-            constants::cputype::CPU_TYPE_ARM64 => Box::new(cpu::arm::Arm64 {}),
-            constants::cputype::CPU_TYPE_ARM => Box::new(cpu::arm::Arm {}),
+        let cpu_type = match bin.header.cputype {
+            constants::cputype::CPU_TYPE_X86 => cpu::CpuType::X86,
+            constants::cputype::CPU_TYPE_X86_64 => cpu::CpuType::X64,
+            constants::cputype::CPU_TYPE_ARM => cpu::CpuType::ARM,
+            constants::cputype::CPU_TYPE_ARM64 => cpu::CpuType::ARM64,
             _ => {
                 panic!("MachO is corrupted")
             }
@@ -78,28 +76,32 @@ impl Mach {
 
         Self {
             path: path.clone(),
-            sections: sections,
-            cpu: cpu,
+            sections,
+            cpu_type: cpu_type,
             entry_point: bin.entry,
         }
     }
 }
 
-impl ExecutableFormat for Mach {
+impl ExecutableFileFormat for Mach {
     fn path(&self) -> &PathBuf {
         &self.path
     }
 
-    fn format(&self) -> Format {
-        Format::Mach
+    fn format(&self) -> FileFormat {
+        FileFormat::MachO
     }
 
     fn sections(&self) -> &Vec<Section> {
         &self.sections
     }
 
-    fn cpu(&self) -> &dyn cpu::Cpu {
-        self.cpu.as_ref()
+    // fn cpu(&self) -> &dyn cpu::Cpu {
+    //     self.cpu.as_ref()
+    // }
+
+    fn cpu_type(&self) -> cpu::CpuType {
+        self.cpu_type
     }
 
     fn entry_point(&self) -> u64 {

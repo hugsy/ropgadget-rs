@@ -224,6 +224,7 @@ pub fn find_gadgets_from_position(
         cpu::CpuType::X64 => { 16 }
         cpu::CpuType::ARM64 => { 16 }
         cpu::CpuType::ARM => { 16 }
+        cpu::CpuType::Unknown => panic!(),
     };
 
     let start_address = section.start_address.clone();

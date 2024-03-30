@@ -11,7 +11,14 @@ use crate::gadget::{Instruction, InstructionGroup};
  */
 
 pub enum DisassemblyEngineType {
+    Invalid,
     Capstone,
+}
+
+impl Default for DisassemblyEngineType {
+    fn default() -> Self {
+        DisassemblyEngineType::Invalid
+    }
 }
 
 //
@@ -36,6 +43,7 @@ impl DisassemblyEngine {
             DisassemblyEngineType::Capstone => Self {
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
+            DisassemblyEngineType::Invalid => panic!(),
         }
     }
 }
@@ -116,6 +124,8 @@ impl CapstoneDisassembler {
                 .detail(true)
                 .build()
                 .expect("Failed to create Capstone object"),
+
+            CpuType::Unknown => panic!(),
         };
 
         Self { cs }
@@ -170,8 +180,8 @@ impl CapstoneDisassembler {
             let insn = Instruction {
                 raw: cs_insn.bytes().to_vec(),
                 size: cs_insn.bytes().len(),
-                mnemonic: mnemonic,
-                operands: operands,
+                mnemonic,
+                operands,
                 address: cs_insn.address(),
                 group: insn_group,
             };

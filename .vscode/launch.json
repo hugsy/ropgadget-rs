@@ -1,0 +1,87 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) Launch tests",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "cargo",
+            "args": [
+                "test"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) Launch rp-rs",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/examples/rp-rs",
+            "args": [
+                "-vv",
+                // "-t",
+                // "4",
+                "--rop-types",
+                "ret",
+                // "--rop-types",
+                // "call",
+                // "--rop-types",
+                // "jump", // any, jump, call, ret, int, iret, privileged
+                "--unique",
+                // "${workspaceFolder}/tests/bin/small-arm32.pe",
+                // "${workspaceFolder}/tests/bin/small-arm64.pe",
+                // "${workspaceFolder}/tests/bin/small-x64.pe",
+                // "${workspaceFolder}/tests/bin/small-x86.pe",
+                // "${workspaceFolder}/tests/bin/small-x64.macho",
+                // "${workspaceFolder}/tests/bin/small-x86.macho",
+                // "${workspaceFolder}/tests/bin/small-x64.elf",
+                // "${workspaceFolder}/tests/bin/small-x86.elf",
+                // "${workspaceFolder}/tests/bin/small-arm64.elf",
+                "${workspaceFolder}/tests/bin/small-arm32.elf",
+                // "${workspaceFolder}/tests/bin/big-x64.elf",
+                // "${workspaceFolder}/tests/bin/big-x86.elf",
+                // "${workspaceFolder}/tests/bin/big-arm64.elf",
+                // "${workspaceFolder}/tests/bin/big-arm32.elf",
+                // "${workspaceFolder}/tests/bin/big-x64.pe",
+                // "${workspaceFolder}/tests/bin/big-x86.pe",
+                // "${workspaceFolder}/tests/bin/big-arm64.pe",
+                // "${workspaceFolder}/tests/bin/big-arm32.pe",
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+    ]
+}
