@@ -67,27 +67,36 @@ jobs:
         if: ${{ matrix.job.os != 'windows-latest' }}
         run: |
           case ${{ matrix.job.use-cross }} in
-            true) cargo install cross; cross build --release --target=${{ matrix.job.target }} ;;
-            false) cargo build --release --target=${{ matrix.job.target }} ;;
+            true)
+              cargo install cross
+              cross build --release --lib
+              cross build --example rp-rs --release --target=${{ matrix.job.target }}
+              ;;
+
+            false)
+              cargo build --release --lib
+              cargo build --example rp-rs --release --target=${{ matrix.job.target }}
+              ;;
             *) echo "Unknown ${{ matrix.job.use-cross }}"; exit 1 ;;
           esac
 
       - name: Build (Windows)
         if: ${{ matrix.job.os == 'windows-latest' }}
         run: |
-          cargo build --release --target=${{ matrix.job.target }}
+          cargo build --release --lib
+          cargo build --release --target=${{ matrix.job.target }} --example rp-rs
 
       - name: Prepare artifact
         shell: bash
         run: |
           mkdir build
-          cargo install --path . --root build
+          # cargo install --path . --root build
 
       - name: Publish artifact
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ env.GITHUB_SHA_SHORT }}
-          path: build/bin
+          path: target/
 
   notify:
     runs-on: 'ubuntu-22.04'
