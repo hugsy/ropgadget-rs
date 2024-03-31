@@ -35,7 +35,7 @@ impl std::fmt::Display for InstructionGroup {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     pub size: usize,
     pub raw: Vec<u8>,
@@ -86,7 +86,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Gadget {
     pub address: u64,
     pub insns: Vec<Instruction>,

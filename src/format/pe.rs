@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use goblin;
 use log::debug;
 
-use crate::cpu;
+use crate::cpu::{self, CpuType};
 // use crate::cpu;
 use crate::{format::FileFormat, section::Permission, section::Section};
 
@@ -32,68 +32,64 @@ impl Default for Pe {
     }
 }
 
-impl From<goblin::pe::PE<'_>> for Pe {
-    fn from(obj: goblin::pe::PE) -> Self {
+impl Pe {
+    pub fn new(path: PathBuf, obj: goblin::pe::PE<'_>) -> Self {
         let mut executable_sections: Vec<Section> = Vec::new();
+        let file = File::open(&path).unwrap();
+        let mut reader = BufReader::new(file);
 
-        // let file = File::open(&path).unwrap();
-        // let mut reader = BufReader::new(file);
+        for current_section in &obj.sections {
+            // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE == 0 {
+            //     continue;
+            // }
 
-        for s in &obj.sections {
-            if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE == 0 {
-                continue;
-            }
+            // let section_name = match std::str::from_utf8(&s.name) {
+            //     Ok(v) => String::from(v).replace("\0", ""),
+            //     Err(_) => String::new(),
+            // };
 
-            let section_name = match std::str::from_utf8(&s.name) {
-                Ok(v) => String::from(v).replace("\0", ""),
-                Err(_) => String::new(),
-            };
+            // let mut section = Section::new(
+            //     s.virtual_address as u64,
+            //     (s.virtual_address + s.virtual_size - 1) as u64,
+            // );
 
-            let mut section = Section::new(
-                s.virtual_address as u64,
-                (s.virtual_address + s.virtual_size - 1) as u64,
-            );
+            // section.name = Some(section_name);
 
-            section.name = Some(section_name);
+            // let mut perm = Permission::EXECUTABLE;
+            // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
+            //     perm |= Permission::READABLE;
+            // }
 
-            let mut perm = Permission::EXECUTABLE;
-            if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
-                perm |= Permission::READABLE;
-            }
+            // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
+            //     perm |= Permission::WRITABLE;
+            // }
 
-            if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
-                perm |= Permission::WRITABLE;
-            }
-
-            section.permission = perm;
+            // section.permission = perm;
 
             // let data = s.data();
 
-            // reader
-            //     .seek(SeekFrom::Start(s.pointer_to_raw_data as u64))
-            //     .unwrap();
-            // reader.read_exact(&mut section.data).unwrap();
+            let mut section = Section::from(current_section);
 
-            // debug!("Adding {}", section);
-            // executable_sections.push(section);
+            if section.permission.contains(Permission::EXECUTABLE) == false {
+                continue;
+            }
+
+            match reader.seek(SeekFrom::Start(current_section.pointer_to_raw_data as u64)) {
+                Ok(_) => {}
+                Err(e) => panic!("Corrupted PE: {:?}", e),
+            };
+
+            reader.read_exact(&mut section.data).unwrap();
+
+            debug!("Adding {}", section);
+            executable_sections.push(section);
         }
 
-        let _cpu_type = match obj.header.coff_header.machine {
-            goblin::pe::header::COFF_MACHINE_X86 => cpu::CpuType::X86,
-            goblin::pe::header::COFF_MACHINE_X86_64 => cpu::CpuType::X64,
-            goblin::pe::header::COFF_MACHINE_ARM => cpu::CpuType::ARM,
-            goblin::pe::header::COFF_MACHINE_ARMNT => cpu::CpuType::ARM,
-            goblin::pe::header::COFF_MACHINE_ARM64 => cpu::CpuType::ARM64,
-            _ => {
-                panic!("PE is corrupted")
-            }
-        };
-
         Self {
-            // path: Default::default(),
+            path: path.clone(),
             sections: executable_sections,
             // cpu,
-            cpu_type: _cpu_type,
+            cpu_type: CpuType::from(&obj.header.coff_header),
             entry_point: obj.entry as u64,
             ..Default::default()
         }

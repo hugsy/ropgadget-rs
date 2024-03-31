@@ -1,10 +1,9 @@
-use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+// use std::fs::File;
+// use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use colored::Colorize;
 use goblin;
-use goblin::mach::constants;
 use log::debug;
 
 use crate::cpu;
@@ -27,57 +26,63 @@ impl Mach {
 
         let filepath = path.to_str().unwrap();
 
-        let mut sections: Vec<Section> = Vec::new();
+        let mut executable_sections: Vec<Section> = Vec::new();
 
         debug!(
             "looking for executables sections in MachO: '{}'",
             filepath.bold()
         );
 
-        let file = File::open(&path).unwrap();
-        let mut reader = BufReader::new(file);
+        for current_segment in &bin.segments {
+            // for current_section in current_segment.sections().iter() {
+            // if s.flags & constants::S_ATTR_PURE_INSTRUCTIONS == 0
+            //     || s.flags & constants::S_ATTR_SOME_INSTRUCTIONS == 0
+            // {
+            //     continue;
+            // }
 
-        for s in &bin.segments {
-            if s.flags & constants::S_ATTR_PURE_INSTRUCTIONS == 0
-                || s.flags & constants::S_ATTR_SOME_INSTRUCTIONS == 0
-            {
+            // let section_name = match std::str::from_utf8(&s.segname) {
+            //     Ok(v) => String::from(v).replace("\0", ""),
+            //     Err(_) => "".to_string(),
+            // };
+
+            // let mut section = Section::new(s.vmaddr as u64, (s.vmaddr + s.vmsize - 1) as u64);
+
+            // section.name = Some(section_name);
+
+            // let perm = Permission::EXECUTABLE | Permission::READABLE; // todo: fix later
+            // section.permission = perm;
+
+            let section = Section::from(current_segment).data(current_segment.data.to_vec());
+
+            if section.permission.contains(Permission::EXECUTABLE) == false {
                 continue;
             }
 
-            let section_name = match std::str::from_utf8(&s.segname) {
-                Ok(v) => String::from(v).replace("\0", ""),
-                Err(_) => "".to_string(),
-            };
-
-            let mut section = Section::new(s.vmaddr as u64, (s.vmaddr + s.vmsize - 1) as u64);
-
-            section.name = Some(section_name);
-
-            let perm = Permission::EXECUTABLE | Permission::READABLE; // todo: fix later
-            section.permission = perm;
-
-            reader.seek(SeekFrom::Start(s.fileoff as u64)).unwrap();
-            reader.read_exact(&mut section.data).unwrap();
+            // reader
+            //     .seek(SeekFrom::Start(current_segment.fileoff as u64))
+            //     .unwrap();
+            // reader.read_exact(&mut section.data).unwrap();
 
             debug!("Adding {}", section);
-
-            sections.push(section);
+            executable_sections.push(section);
+            // }
         }
 
-        let cpu_type = match bin.header.cputype {
-            constants::cputype::CPU_TYPE_X86 => cpu::CpuType::X86,
-            constants::cputype::CPU_TYPE_X86_64 => cpu::CpuType::X64,
-            constants::cputype::CPU_TYPE_ARM => cpu::CpuType::ARM,
-            constants::cputype::CPU_TYPE_ARM64 => cpu::CpuType::ARM64,
-            _ => {
-                panic!("MachO is corrupted")
-            }
-        };
+        // let cpu_type = match bin.header.cputype {
+        //     constants::cputype::CPU_TYPE_X86 => cpu::CpuType::X86,
+        //     constants::cputype::CPU_TYPE_X86_64 => cpu::CpuType::X64,
+        //     constants::cputype::CPU_TYPE_ARM => cpu::CpuType::ARM,
+        //     constants::cputype::CPU_TYPE_ARM64 => cpu::CpuType::ARM64,
+        //     _ => {
+        //         panic!("MachO is corrupted")
+        //     }
+        // };
 
         Self {
             path: path.clone(),
-            sections,
-            cpu_type: cpu_type,
+            sections: executable_sections,
+            cpu_type: cpu::CpuType::from(&bin.header),
             entry_point: bin.entry,
         }
     }

@@ -49,3 +49,40 @@ impl Default for CpuType {
         CpuType::Unknown
     }
 }
+
+impl From<&goblin::elf::header::Header> for CpuType {
+    fn from(value: &goblin::elf::header::Header) -> Self {
+        match value.e_machine {
+            goblin::elf::header::EM_386 => CpuType::X86,
+            goblin::elf::header::EM_X86_64 => CpuType::X64,
+            goblin::elf::header::EM_ARM => CpuType::ARM,
+            goblin::elf::header::EM_AARCH64 => CpuType::ARM64,
+            _ => panic!("ELF machine format is unsupported"),
+        }
+    }
+}
+
+impl From<&goblin::mach::header::Header> for CpuType {
+    fn from(value: &goblin::mach::header::Header) -> Self {
+        match value.cputype {
+            goblin::mach::constants::cputype::CPU_TYPE_X86 => CpuType::X86,
+            goblin::mach::constants::cputype::CPU_TYPE_X86_64 => CpuType::X64,
+            goblin::mach::constants::cputype::CPU_TYPE_ARM => CpuType::ARM,
+            goblin::mach::constants::cputype::CPU_TYPE_ARM64 => CpuType::ARM64,
+            _ => panic!("MachO is corrupted"),
+        }
+    }
+}
+
+impl From<&goblin::pe::header::CoffHeader> for CpuType {
+    fn from(obj: &goblin::pe::header::CoffHeader) -> Self {
+        match obj.machine {
+            goblin::pe::header::COFF_MACHINE_X86 => CpuType::X86,
+            goblin::pe::header::COFF_MACHINE_X86_64 => CpuType::X64,
+            goblin::pe::header::COFF_MACHINE_ARM => CpuType::ARM,
+            goblin::pe::header::COFF_MACHINE_ARMNT => CpuType::ARM,
+            goblin::pe::header::COFF_MACHINE_ARM64 => CpuType::ARM64,
+            _ => panic!("Unsupported format"),
+        }
+    }
+}

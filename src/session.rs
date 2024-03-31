@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::{default, thread};
+use std::thread;
 
 use clap::ValueEnum;
 use colored::*;
@@ -34,6 +34,16 @@ pub struct ExecutableDetails {
     pub filepath: PathBuf,
     pub format: Box<dyn format::ExecutableFileFormat>,
     pub cpu: Box<dyn cpu::Cpu>,
+}
+
+impl std::fmt::Debug for ExecutableDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutableDetails")
+            .field("filepath", &self.filepath)
+            .field("format", &self.format.format().to_string())
+            .field("cpu", &self.cpu.cpu_type().to_string())
+            .finish()
+    }
 }
 
 impl std::fmt::Display for ExecutableDetails {
@@ -116,9 +126,7 @@ impl log::Log for RpLogger {
     fn flush(&self) {}
 }
 
-static LOGGER: RpLogger = RpLogger;
-
-// #[derive(Default)]
+#[derive(Debug)]
 pub struct Session {
     //
     // session required information
@@ -203,15 +211,15 @@ impl Default for Session {
     }
 }
 
-impl std::fmt::Debug for Session {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Session")
-            .field("path", &self.filepath())
-            .field("format", &self.info.format.format().to_string())
-            .field("cpu", &self.info.cpu.cpu_type().to_string())
-            .finish()
-    }
-}
+// impl std::fmt::Debug for Session {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Session")
+//             .field("path", &self.filepath())
+//             .field("format", &self.info.format.format().to_string())
+//             .field("cpu", &self.info.cpu.cpu_type().to_string())
+//             .finish()
+//     }
+// }
 
 impl std::fmt::Display for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -227,10 +235,9 @@ impl std::fmt::Display for Session {
     }
 }
 
-//
-// find all the gadgets in the different sections in parallel
-// returns true if no error occured
-//
+///
+/// This function manages the thread pool to look for gadget
+///
 pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     let info = &session.info;
     let number_of_sections = info.format.sections().len();
@@ -239,7 +246,7 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
 
     //
-    // multithread parsing of each section
+    // Multithread parsing of each section
     //
     for section_idx in 0..number_of_sections {
         if info.format.sections().get(section_idx).is_none() {
@@ -311,6 +318,9 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     Ok(())
 }
 
+///
+/// Worker routine to search for gadgets
+///
 fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadget> {
     let cpu = session.info.cpu.as_ref();
     let engine = DisassemblyEngine::new(&session.engine_type, cpu);

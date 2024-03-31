@@ -10,16 +10,18 @@ use crate::gadget::{Instruction, InstructionGroup};
  *
  */
 
+#[derive(Debug, Default)]
 pub enum DisassemblyEngineType {
+    #[default]
     Invalid,
     Capstone,
 }
 
-impl Default for DisassemblyEngineType {
-    fn default() -> Self {
-        DisassemblyEngineType::Invalid
-    }
-}
+// impl Default for DisassemblyEngineType {
+//     fn default() -> Self {
+//         DisassemblyEngineType::Invalid
+//     }
+// }
 
 //
 // All disassembler must implement this trait

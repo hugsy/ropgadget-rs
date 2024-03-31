@@ -27,7 +27,7 @@ pub struct Args {
     output_file: Option<PathBuf>,
 
     /// The verbosity level
-    #[arg(short, long = "verbose", default_value_t = 2)]
+    #[arg(short, long = "verbose", action = clap::ArgAction::Count)]
     verbosity: u8,
 
     /// Unique gadgets
@@ -89,6 +89,9 @@ fn main() -> GenericResult<()> {
         .verbosity(verbosity)
         .use_color(!args.no_color);
 
-    info!("Created session: {}", sess);
-    collect_all_gadgets(sess)
+    info!("Created session: {:?}", sess);
+    match collect_all_gadgets(sess) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
 }

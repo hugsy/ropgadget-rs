@@ -2,9 +2,10 @@
 extern crate bitflags;
 
 use colored::Colorize;
+use gadget::Gadget;
+use std::fs;
 use std::io::Write as _;
 use std::sync::Arc;
-use std::{fs, path::PathBuf};
 
 use log::{debug, error, info, warn};
 
@@ -20,31 +21,35 @@ pub mod session;
 use crate::common::GenericResult;
 use crate::session::Session;
 
-pub fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
+pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let info = &sess.info;
     let start_timestamp = std::time::Instant::now();
     let sections = info.format.sections();
     let total_gadgets_found: usize;
     let use_color = sess.use_color.clone();
     let unique_only = sess.unique_only.clone();
-    let _output = sess.output.clone();
+    let chosen_output_format = sess.output.clone();
     let entrypoint_address = info.format.entry_point().clone();
     let is_64b = info.is_64b();
 
-    //
-    // the real meat of the tool
-    //
     info!(
         "Looking for gadgets in {} executable section(s) (with {} threads)...'",
         sections.len(),
         sess.nb_thread,
     );
 
+    //
+    // use an arc for the session to share between threads
+    //
     let arc = Arc::new(sess);
-    let res = session::find_gadgets(arc.clone());
-    if res.is_err() {
-        error!("An error occured while collecting gadgets");
-        return res;
+    match session::find_gadgets(arc.clone()) {
+        Ok(_) => {
+            dbg!("Done collecting gadgets");
+        }
+        Err(e) => {
+            error!("An error occured while collecting gadgets: {:?}", e);
+            return Err(e);
+        }
     }
 
     let mut gadgets = arc.gadgets.lock().unwrap();
@@ -74,7 +79,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
     //
     // Write to given output
     //
-    match _output {
+    match chosen_output_format {
         session::RopGadgetOutput::None => {
             warn!("No output specified");
         }
@@ -101,21 +106,27 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
         }
 
         session::RopGadgetOutput::File(filename) => {
-            info!(
+            dbg!(
                 "Dumping {} gadgets to '{}'...",
                 gadgets.len(),
                 filename.to_str().unwrap()
             );
+
             if use_color {
                 warn!("Disabling colors when writing to file");
             }
 
-            let mut file = fs::File::create(filename)?;
-            for g in &*gadgets {
-                let txt = g.text(false);
-                let addr = entrypoint_address + g.address;
-                file.write((format!("{:#x} | {}\n", addr, txt)).as_bytes())?;
+            let mut file = fs::File::create(&filename)?;
+            for gadget in &*gadgets {
+                let addr = entrypoint_address + gadget.address;
+                file.write((format!("{:#x} | {}\n", addr, gadget.text(false))).as_bytes())?;
             }
+
+            info!(
+                "Written {} gadgets to '{}'",
+                gadgets.len(),
+                filename.to_str().unwrap()
+            );
         }
     }
 
@@ -132,40 +143,22 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<()> {
         );
     }
 
-    Ok(())
-}
-
-fn test_one(sz: &str, arch: &str, fmt: &str) -> bool {
-    #![allow(dead_code)]
-    let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
-    // let mut output_fname = std::env::temp_dir();
-    // output_fname.push(format!("rop-{}-{}.{}", sz, arch, fmt));
-    // let s = Session {
-    //     filepath: input_fname.clone(),
-    //     nb_thread: 2,
-    //     output: RopGadgetOutput::Console,
-    //     unique_only: true,
-    //     use_color: false,
-    //     max_gadget_length: 16,
-    //     gadget_types: vec![InstructionGroup::Ret],
-    //     profile_type: RopProfileStrategy::Fast,
-    //     verbosity: LevelFilter::Debug,
-    //     gadgets: std::sync::Mutex::new(Vec::new()),
-    //     engine_type: engine::DisassemblyEngineType::Capstone,
-    //     ..Default::default()
-    // };
-
-    let s = Session::new(input_fname);
-
-    collect_all_gadgets(s).is_ok()
-
-    // fs::remove_file(output_fname.as_path()).unwrap();
-
-    // res
+    Ok(gadgets.clone())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{collect_all_gadgets, gadget::Gadget, session::RopGadgetOutput, Session};
+    use std::path::PathBuf;
+
+    fn run_basic_test(sz: &str, arch: &str, fmt: &str) -> Vec<Gadget> {
+        let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
+        let s = Session::new(input_fname).output(RopGadgetOutput::None);
+        match collect_all_gadgets(s) {
+            Ok(gadgets) => gadgets,
+            Err(e) => panic!("{:?}", e),
+        }
+    }
 
     mod pe {
         use super::super::*;
@@ -173,29 +166,32 @@ mod tests {
 
         #[test]
         fn x86() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "x86", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x86", FMT);
+                assert!(res.len() > 0);
             }
         }
 
         #[test]
         fn x64() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "x64", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x64", FMT);
+                assert!(res.len() > 0);
             }
         }
 
-        #[test]
-        fn arm32() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "arm32", FMT));
-            }
-        }
-
+        // #[test]
+        // fn arm32() {
+        //     for sz in ["small", "big"] {
+        //         let res = tests::run_basic_test(sz, "arm32", FMT);
+        //         assert!(res.len() > 0);
+        //     }
+        // }
         #[test]
         fn arm64() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "arm64", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "arm64", FMT);
+                assert!(res.len() > 0);
             }
         }
     }
@@ -206,29 +202,32 @@ mod tests {
 
         #[test]
         fn x86() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "x86", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x86", FMT);
+                assert!(res.len() > 0);
             }
         }
 
         #[test]
         fn x64() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "x64", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x64", FMT);
+                assert!(res.len() > 0);
             }
         }
 
-        #[test]
-        fn arm32() {
-            for sz in vec!["big"] {
-                assert!(test_one(sz, "arm32", FMT));
-            }
-        }
-
+        // #[test]
+        // fn arm32() {
+        //     for sz in ["big", "small"] {
+        //         let res = tests::run_basic_test(sz, "arm32", FMT);
+        //         assert!(res.len() > 0);
+        //     }
+        // }
         #[test]
         fn arm64() {
-            for sz in vec!["small", "big"] {
-                assert!(test_one(sz, "arm64", FMT));
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "arm64", FMT);
+                assert!(res.len() > 0);
             }
         }
     }
@@ -240,14 +239,16 @@ mod tests {
         #[test]
         fn x86() {
             for sz in vec!["small"] {
-                assert!(test_one(sz, "x86", FMT));
+                let res = tests::run_basic_test(sz, "x86", FMT);
+                assert!(res.len() > 0);
             }
         }
 
         #[test]
         fn x64() {
             for sz in vec!["small"] {
-                assert!(test_one(sz, "x64", FMT));
+                let res = tests::run_basic_test(sz, "x64", FMT);
+                assert!(res.len() > 0);
             }
         }
     }

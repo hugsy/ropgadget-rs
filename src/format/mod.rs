@@ -9,8 +9,9 @@ use crate::{common::GenericResult, cpu::CpuType, error::Error, section::Section}
 use clap::ValueEnum;
 use goblin::Object;
 
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
 pub enum FileFormat {
+    #[default]
     Auto,
     Pe,
     Elf,
@@ -63,11 +64,11 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableFile
     };
 
     match parsed {
-        Object::PE(obj) => Ok(Box::new(pe::Pe::from(obj))),
+        Object::PE(obj) => Ok(Box::new(pe::Pe::new(file.to_path_buf(), obj))),
         Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
         Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
         Object::Archive(_) => Err(Error::InvalidFileError),
         Object::Unknown(_) => Err(Error::InvalidFileError),
-        _ => panic!(),
+        _ => Err(Error::InvalidFileError),
     }
 }
