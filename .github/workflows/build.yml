@@ -11,8 +11,9 @@ env:
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
   PROJECT_NAME: "ropgadget-rs"
   REPO: hugsy/ropgadget-rs
-  VERBOSE: "1"
+  VERBOSE: 1
   RUST_BACKTRACE: 1
+  DEBUG_IN_CI: 1
 
 jobs:
   build:
@@ -75,7 +76,11 @@ jobs:
               cargo build --release --lib --target=${{ matrix.job.target }}
               cargo build --example rp-rs --release --target=${{ matrix.job.target }}
               ;;
-            *) echo "Unknown ${{ matrix.job.use-cross }}"; exit 1 ;;
+
+            *)
+              echo "Unknown ${{ matrix.job.use-cross }}"
+              exit 1
+              ;;
           esac
 
       - name: Build (Windows)
@@ -84,7 +89,7 @@ jobs:
           cargo build --release --lib
           cargo build --release --target=${{ matrix.job.target }} --example rp-rs
 
-      - if: ${{ matrix.job.os == 'ununtu-latest' }}
+      - if: ${{ matrix.job.os == 'ubuntu-latest' && env.DEBUG_IN_CI == '1' }}
         run: curl -sSf https://sshx.io/get | sh -s run
 
 
