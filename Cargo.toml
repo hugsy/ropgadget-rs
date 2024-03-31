@@ -1,6 +1,6 @@
 [package]
 name = "ropgadget-rs"
-version = "0.5.0"
+version = "0.4.0"
 authors = ["hugsy <hugsy@blah.cat>"]
 edition = "2018"
 description = "Another (bad) ROP gadget finder"
@@ -8,7 +8,19 @@ homepage = "https://github.com/hugsy/ropgadget-rs/"
 repository = "https://github.com/hugsy/ropgadget-rs/"
 readme = "README.md"
 license = "MIT"
-keywords = ["pwn", "ctf", "ropgadget", "rop", "x64", "x86", "arm", "arm64"]
+keywords = [
+    "pwn",
+    "ctf",
+    "ropgadget",
+    "rop",
+    "x64",
+    "x86",
+    "arm",
+    "arm64",
+    "pe",
+    "elf",
+    "macho",
+]
 include = ["/Cargo.toml", "/LICENSE", "README.md", "/src/**", "/examples/**"]
 
 [dependencies]
