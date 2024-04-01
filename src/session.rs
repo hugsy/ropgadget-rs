@@ -10,7 +10,7 @@ use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
 use crate::common::GenericResult;
 use crate::cpu;
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
-use crate::format::{self, guess_file_format};
+use crate::format::{self, guess_file_format, pe};
 use crate::gadget::{
     find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
 };
