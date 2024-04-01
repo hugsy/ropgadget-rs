@@ -119,7 +119,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
             let mut file = fs::File::create(&filename)?;
             for gadget in &*gadgets {
                 let addr = entrypoint_address + gadget.address;
-                file.write((format!("{:#x} | {}\n", addr, gadget.text(false))).as_bytes())?;
+                file.write_all((format!("{:#x} | {}\n", addr, gadget.text(false))).as_bytes())?;
             }
 
             info!(
