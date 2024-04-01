@@ -89,7 +89,8 @@ jobs:
           cargo build --release --lib
           cargo build --release --target=${{ matrix.job.target }} --example rp-rs
 
-      - if: ${{ matrix.job.os == 'ubuntu-latest' && env.DEBUG_IN_CI == '1' }}
+      - name: Run Interactive CI Debugger
+        if: ${{ matrix.job.os == 'ubuntu-latest' && env.DEBUG_IN_CI == '1' }}
         run: curl -sSf https://sshx.io/get | sh -s run
 
 
@@ -113,6 +114,7 @@ jobs:
         RUN_URL: "https://github.com/${{ env.REPO }}/actions/runs/${{ github.run_id }}"
         BRANCH_URL: "https://github.com/${{ env.REPO }}/tree/${{ github.ref_name }}"
         AUTHOR_URL: "https://github.com/${{ github.actor }}"
+        AVATAR_URL: "https://camo.githubusercontent.com/9ddce666945f8c507d7c9a83aaa0518b36a47fa1fd9e823e061ed4753e7becdc/68747470733a2f2f692e696d6775722e636f6d2f7a6a63787956662e706e67"
       uses: sarisia/actions-status-discord@v1.14.0
       with:
         nodetail: true
@@ -124,7 +126,7 @@ jobs:
           ● [Detail Page](${{ env.RUN_URL }})
         color: 0x0000ff
         username: ${{ github.actor }} via GithubBot
-        avatar_url: https://camo.githubusercontent.com/9ddce666945f8c507d7c9a83aaa0518b36a47fa1fd9e823e061ed4753e7becdc/68747470733a2f2f692e696d6775722e636f6d2f7a6a63787956662e706e67
+        avatar_url: ${{ env.AVATAR_URL }}
 
   test:
     runs-on: ubuntu-latest
