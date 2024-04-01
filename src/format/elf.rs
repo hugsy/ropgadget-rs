@@ -51,12 +51,12 @@ impl Elf {
             let mut sect =
                 Section::from(current_section).name(&obj.shdr_strtab[current_section.sh_name]);
 
-            if sect.permission.contains(Permission::EXECUTABLE) == false {
+            if !sect.permission.contains(Permission::EXECUTABLE) {
                 continue;
             }
 
             if reader
-                .seek(SeekFrom::Start(current_section.sh_addr as u64))
+                .seek(SeekFrom::Start(current_section.sh_addr))
                 .is_err()
             {
                 panic!("Invalid offset {}", current_section.sh_addr,)

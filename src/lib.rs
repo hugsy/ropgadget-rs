@@ -25,11 +25,11 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let info = &sess.info;
     let start_timestamp = std::time::Instant::now();
     let sections = info.format.sections();
-    let total_gadgets_found: usize;
-    let use_color = sess.use_color.clone();
-    let unique_only = sess.unique_only.clone();
+    
+    let use_color = sess.use_color;
+    let unique_only = sess.unique_only;
     let chosen_output_format = sess.output.clone();
-    let entrypoint_address = info.format.entry_point().clone();
+    let entrypoint_address = info.format.entry_point();
     let is_64b = info.is_64b();
 
     info!(
@@ -57,13 +57,13 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     //
     // if unique, filter out doublons
     //
-    total_gadgets_found = gadgets.len();
+    let total_gadgets_found: usize = gadgets.len();
     if unique_only {
         debug!(
             "Filtering {} gadgets for deplicates ...",
             total_gadgets_found
         );
-        gadgets.sort_by(|a, b| a.text(false).cmp(&b.text(false)));
+        gadgets.sort_by_key(|a| a.text(false));
         gadgets.dedup_by(|a, b| a.text(false).eq_ignore_ascii_case(b.text(false).as_str()));
         info!(
             "{} duplicate gadgets removed",

@@ -12,6 +12,7 @@ use crate::{format::FileFormat, section::Permission, section::Section};
 use super::ExecutableFileFormat;
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct Pe {
     path: PathBuf,
     pub sections: Vec<Section>,
@@ -21,16 +22,7 @@ pub struct Pe {
     cpu_type: cpu::CpuType,
 }
 
-impl Default for Pe {
-    fn default() -> Self {
-        Self {
-            path: Default::default(),
-            sections: Default::default(),
-            entry_point: Default::default(),
-            cpu_type: Default::default(),
-        }
-    }
-}
+
 
 impl Pe {
     pub fn new(path: PathBuf, obj: goblin::pe::PE<'_>) -> Self {
@@ -70,7 +62,7 @@ impl Pe {
 
             let mut section = Section::from(current_section);
 
-            if section.permission.contains(Permission::EXECUTABLE) == false {
+            if !section.permission.contains(Permission::EXECUTABLE) {
                 continue;
             }
 

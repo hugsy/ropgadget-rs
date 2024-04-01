@@ -55,7 +55,7 @@ impl Mach {
 
             let section = Section::from(current_segment).data(current_segment.data.to_vec());
 
-            if section.permission.contains(Permission::EXECUTABLE) == false {
+            if !section.permission.contains(Permission::EXECUTABLE) {
                 continue;
             }
 

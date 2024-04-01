@@ -4,7 +4,9 @@ pub mod x86;
 use clap::ValueEnum;
 
 #[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Default)]
 pub enum CpuType {
+    #[default]
     Unknown,
     X86,
     X64,
@@ -44,11 +46,7 @@ impl std::fmt::Display for CpuType {
     }
 }
 
-impl Default for CpuType {
-    fn default() -> Self {
-        CpuType::Unknown
-    }
-}
+
 
 impl From<&goblin::elf::header::Header> for CpuType {
     fn from(value: &goblin::elf::header::Header) -> Self {

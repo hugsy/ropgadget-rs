@@ -10,7 +10,7 @@ use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
 use crate::common::GenericResult;
 use crate::cpu;
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
-use crate::format::{self, guess_file_format, pe};
+use crate::format::{self, guess_file_format};
 use crate::gadget::{
     find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
 };
@@ -51,8 +51,8 @@ impl std::fmt::Display for ExecutableDetails {
         write!(
             f,
             "Info({}, {}, Entry=0x{:x})",
-            self.cpu.cpu_type().to_string(),
-            self.format.format().to_string(),
+            self.cpu.cpu_type(),
+            self.format.format(),
             self.format.entry_point()
         )
     }
@@ -229,7 +229,7 @@ impl std::fmt::Display for Session {
             "Session(File='{}', {}, Profile={}, GadgetTypes=[{}])",
             self.filepath().to_str().unwrap(),
             self.info,
-            self.profile_type.to_string(),
+            self.profile_type,
             gadget_types.join(", "),
         )
     }
@@ -241,7 +241,7 @@ impl std::fmt::Display for Session {
 pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     let info = &session.info;
     let number_of_sections = info.format.sections().len();
-    let nb_thread = session.nb_thread.clone() as usize;
+    let nb_thread = session.nb_thread as usize;
 
     debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
 

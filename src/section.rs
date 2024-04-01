@@ -21,6 +21,7 @@ impl Default for Permission {
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct Section {
     pub start_address: u64,
     pub end_address: u64,
@@ -76,17 +77,7 @@ impl Section {
     }
 }
 
-impl Default for Section {
-    fn default() -> Self {
-        Self {
-            start_address: Default::default(),
-            end_address: Default::default(),
-            name: None,
-            permission: Default::default(),
-            data: Default::default(),
-        }
-    }
-}
+
 
 impl From<&goblin::elf::section_header::SectionHeader> for Section {
     fn from(value: &goblin::elf::section_header::SectionHeader) -> Self {
@@ -103,7 +94,7 @@ impl From<&goblin::elf::section_header::SectionHeader> for Section {
         let sz = value.sh_size as usize;
 
         Self {
-            start_address: value.sh_addr as u64,
+            start_address: value.sh_addr,
             end_address: value.sh_addr + sz as u64,
             permission: perm,
             name: None,
@@ -123,14 +114,14 @@ impl From<&goblin::mach::segment::Segment<'_>> for Section {
         }
 
         let section_name = match std::str::from_utf8(&value.segname) {
-            Ok(v) => String::from(v).replace("\0", ""),
+            Ok(v) => String::from(v).replace('\0', ""),
             Err(_) => "".to_string(),
         };
 
         let sz = value.vmsize as usize;
 
         Self {
-            start_address: value.vmaddr as u64,
+            start_address: value.vmaddr,
             end_address: value.vmaddr + sz as u64,
             name: Some(section_name),
             permission: perm,
@@ -142,7 +133,7 @@ impl From<&goblin::mach::segment::Segment<'_>> for Section {
 impl From<&goblin::pe::section_table::SectionTable> for Section {
     fn from(value: &goblin::pe::section_table::SectionTable) -> Self {
         let section_name = match std::str::from_utf8(&value.name) {
-            Ok(v) => String::from(v).replace("\0", ""),
+            Ok(v) => String::from(v).replace('\0', ""),
             Err(_) => String::new(),
         };
 
