@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://i.imgur.com/zjcxyVf.png" alt="logo" width="300px"/>
+  <img src="https://i.imgur.com/zjcxyVf.png" alt="logo" width="250px"/>
 </p>
 
-# ropgadget-rs
+# `ropgadget-rs`
 
 <p align="center">
     <a href="https://discord.gg/hSbqxxBgRX"><img alt="Discord" src="https://img.shields.io/badge/Discord-BlahCats-yellow"></a>
@@ -12,99 +12,27 @@
 
 RopGadget-rs started as a weekend project to learn [Rust](https://www.rust-lang.org/). But as usual it also started from the need to get really fast & easily portable ropgadget finder capable of handling quickly any binary (especially very large ones such as mshtml, ntoskrnl, chrome, etc.).
 
-It works ok for me, but don't make any claim on performance.
-You've been warned, don't blame me...
+> [!NOTE]
+> This library is a side project to learn Rust. If you want better tools, see the ones mentioned at the bottom of the page. 
 
 Currently supports:
 
-|       |  ELF  |  PE   | Mach  |
-| :---: | :---: | :---: | :---: |
+|       |  ELF   |  PE   |    MachO  |
+| :---: | :----: |:-----:|:---------:|
 |  x86  |   ✅   |   ✅   |   ✅   |
 |  x64  |   ✅   |   ✅   |   ✅   |
 |  arm  |   ✅   |   ✅   |   ❌   |
 | arm64 |   ✅   |   ✅   |   ❌   |
 
 
-## ropgadget-rs
+## `ropgadget-rs`
 
-```console
-❯ .\ropgadget-rs.exe --help
-Another (bad) ROP gadget finder
-
-Usage: rp-rs.exe [OPTIONS] <FILE>
-
-Arguments:
-  <FILE>
-          The file to parse
-
-Options:
-  -t, --number-of-threads <THREAD_NUM>
-          The number of threads to use
-
-          [default: 2]
-
-  -o, --output-file <OUTPUT>
-          Write gadget to file (optional)
-
-  -v, --verbose...
-          The verbosity level
-
-  -u, --unique
-          Unique gadgets
-
-      --architecture <ARCHITECTURE>
-          Force the architecture to given value
-
-          [possible values: x86, x64, arm, arm64]
-
-      --format <FORMAT>
-          Force the OS to given value
-
-          [possible values: pe, elf, mach]
-
-  -i, --image-base <IMAGE_BASE>
-          Specify an image base
-
-          [default: 0]
-
-      --no-color
-          Disable colors
-
-      --max-insn-per-gadget <MAX_INSN_PER_GADGET>
-          The maximum number of instructions in a gadget
-
-          [default: 6]
-
-      --max-size <MAX_SIZE>
-          The maximum size of the gadget
-
-          [default: 32]
-
-      --rop-types <ROP_TYPES>
-          The type of gadgets to focus on (default - return only)
-
-          [possible values: jump, call, ret, int, iret, privileged]
-
-      --profile-type <PROFILE_TYPE>
-          The profile type (default - fast)
-
-          [default: fast]
-
-          Possible values:
-          - fast:     Strategy Fast
-          - complete: Strategy Complete
-
-  -h, --help
-          Print help information (use `-h` for a summary)
-
-  -V, --version
-          Print version information
-```
-
+Since 0.4, RopGadget-Rs was re-designed to be built as a library so it can be integrated to other projects.
+But a lightweight standalone binary that features all what the library offers, can also be built.
 
 ## Build
 
-If you don't have `cargo`:
+(Optionally) If you don't have `cargo`:
 
  - On Linux/MacOS
 ```bash
@@ -112,21 +40,25 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
  - On Windows
-```bash
+```ps1
 Invoke-WebRequest https://win.rustup.rs/x86_64 -UseBasicParsing -OutFile "rustup-init.exe"
 Invoke-Expression rustup-init.exe
 ```
 
 Then build:
-
 ```bash
 git clone https://github.com/hugsy/ropgadget-rs
 cd ropgadget-rs
-cargo build
+cargo build --release --lib
 ```
 
-And run:
+You might also want to build the ropgadget-rs binary so it can be easily used from the command line:
+```bash
+cargo build --release --example rp-rs
+```
 
+
+And run:
 ```bash
 cargo run -- --help
 ```
@@ -134,24 +66,23 @@ cargo run -- --help
 
 ## Install
 
-Via `cargo`:
+Via `cargo`
 
 ```bash
-$ cargo install --bins --git https://github.com/hugsy/ropgadget-rs.git
+cargo install --bins --git https://github.com/hugsy/ropgadget-rs.git
 ```
 
-## Perfs
+## Performance
 
-Well yeah, it's pretty fast (thanks Rust) but I'll try to improve here and there as I learn to write better Rust.
-
-For a lame benchmark: here on an old i5-4300M (build in `--release` mode) with 2 threads (default)
+The tool performs decently but could largely be optimized (and will be, over time).
+Here are some performance obtained on an old i5-4300M (build in `--release` mode) with 2 threads (default)
 
  * `ntoskrnl.exe` (Windows 10 RS6 - 10.0.19041.329) - 10,921,280 bytes
 
-```bash
-PS C:\Users\hugsy>  .\ropgadget-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
-[INFO] - Checking file '.\ntoskrnl-rs6.exe'
-[INFO] - Creating new Session(file=.\ntoskrnl-rs6.exe, Info(Arch=x86-64, OS=PE))
+```console
+>  ./ropgadget-rs.exe -o rop.txt -vv ./ntoskrnl-rs6.exe
+[INFO] - Checking file './ntoskrnl-rs6.exe'
+[INFO] - Creating new Session(file=./ntoskrnl-rs6.exe, Info(Arch=x86-64, OS=PE))
 [INFO] - Looking for gadgets in 15 sections (with 2 threads)...'
 [INFO] - Dumping 336787 gadgets to 'rop.txt'...
 [INFO] - Done!
@@ -160,10 +91,10 @@ PS C:\Users\hugsy>  .\ropgadget-rs.exe -o rop.txt -vv .\ntoskrnl-rs6.exe
 
  * `msedge.dll` (Chromium Edge - 83.0.478.64) - 145,665,416 bytes
 
-```bash
-PS C:\Users\hugsy> .\ropgadget-rs.exe -o rop.txt -vv .\msedge.dll
-[INFO] - Checking file '.\msedge.dll'
-[INFO] - Creating new Session(file=.\msedge.dll, Info(Arch=x86-64, OS=PE))
+```console
+> ./ropgadget-rs -o rop.txt -vv ./msedge.dll
+[INFO] - Checking file './msedge.dll'
+[INFO] - Creating new Session(file=./msedge.dll, Info(Arch=x86-64, OS=PE))
 [INFO] - Looking for gadgets in 1 sections (with 2 threads)...'
 [INFO] - Dumping 5713703 gadgets to 'rop.txt'...
 [INFO] - Done!
@@ -172,7 +103,7 @@ PS C:\Users\hugsy> .\ropgadget-rs.exe -o rop.txt -vv .\msedge.dll
 
 YMMV but most small files (like Unix binaries) will execute in way under 1 second.
 
-```text
+```console
 $ ./ropgadget-rs -vv -o /dev/null /bin/ls
 [INFO] - Checking file '/bin/ls'
 [INFO] - Creating new Session(file=/bin/ls, Info(Arch=x86-64, OS=ELF))
