@@ -68,13 +68,11 @@ jobs:
           case ${{ matrix.job.use-cross }} in
             true)
               cargo install cross
-              cross build --release --lib --target=${{ matrix.job.target }}
-              cross build --example rp-rs --release --target=${{ matrix.job.target }}
+              cross build --release --all-targets  --target=${{ matrix.job.target }}
               ;;
 
             false)
-              cargo build --release --lib --target=${{ matrix.job.target }}
-              cargo build --example rp-rs --release --target=${{ matrix.job.target }}
+              cargo build --release --all-targets  --target=${{ matrix.job.target }}
               ;;
 
             *)
@@ -86,11 +84,10 @@ jobs:
       - name: Build (Windows)
         if: ${{ matrix.job.os == 'windows-latest' }}
         run: |
-          cargo build --release --lib
-          cargo build --release --target=${{ matrix.job.target }} --example rp-rs
+          cargo build --release --all-targets --target=${{ matrix.job.target }}
 
       - name: Run Interactive CI Debugger
-        if: ${{ matrix.job.os == 'ubuntu-latest' && env.DEBUG_IN_CI == '1' }}
+        if: ${{ matrix.job.os == 'macos-latest' && env.DEBUG_IN_CI == '1' }}
         run: curl -sSf https://sshx.io/get | sh -s run
 
 
@@ -99,10 +96,10 @@ jobs:
         with:
           name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ github.sha }}
           path: |
-            target/debug/examples/rp-rs*
-            target/debug/libropgadget_rs.*
             target/release/examples/rp-rs*
             target/release/libropgadget_rs.*
+            target/${{ matrix.job.target }}/release/libropgadget_rs.*
+            target/${{ matrix.job.target }}/release/examples/rp-rs*
 
   notify:
     runs-on: ubuntu-latest
