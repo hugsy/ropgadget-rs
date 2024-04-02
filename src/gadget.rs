@@ -35,7 +35,7 @@ impl std::fmt::Display for InstructionGroup {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     pub size: usize,
     pub raw: Vec<u8>,
@@ -53,7 +53,7 @@ impl Instruction {
                 format!("{}", self.mnemonic.cyan())
             }
             false => {
-                format!("{}", self.mnemonic)
+                self.mnemonic.to_string()
             }
         };
 
@@ -86,7 +86,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Gadget {
     pub address: u64,
     pub insns: Vec<Instruction>,
@@ -111,15 +111,15 @@ impl Gadget {
         // by nature, we should never be here if insns.len() is 0 (should at least have the
         // ret insn) so we assert() to be notified
         //
-        if insns.len() == 0 {
+        if insns.is_empty() {
             std::panic::panic_any("GadgetBuildError");
         }
 
         let size = insns.iter().map(|x| x.size).sum();
 
-        let raw = insns.iter().map(|x| x.raw.clone()).flatten().collect();
+        let raw = insns.iter().flat_map(|x| x.raw.clone()).collect();
 
-        let address = insns.get(0).unwrap().address;
+        let address = insns.first().unwrap().address;
 
         Self {
             size,
@@ -224,9 +224,10 @@ pub fn find_gadgets_from_position(
         cpu::CpuType::X64 => { 16 }
         cpu::CpuType::ARM64 => { 16 }
         cpu::CpuType::ARM => { 16 }
+        cpu::CpuType::Unknown => panic!(),
     };
 
-    let start_address = section.start_address.clone();
+    let start_address = section.start_address;
     let s: usize = if initial_position < max_invalid_size {
         0
     } else {
@@ -277,7 +278,7 @@ pub fn find_gadgets_from_position(
         match insns {
             Some(x) => {
                 nb_invalid = 0;
-                if x.len() > 0 {
+                if !x.is_empty() {
                     let last_insn = x.last().unwrap();
                     if session.gadget_types.contains(&last_insn.group) {
                         let gadget = Gadget::new(x);

@@ -8,12 +8,31 @@ homepage = "https://github.com/hugsy/ropgadget-rs/"
 repository = "https://github.com/hugsy/ropgadget-rs/"
 readme = "README.md"
 license = "MIT"
-keywords = ["pwn", "ctf", "x64", "x86", "arm", "arm64"]
+keywords = [
+    "pwn",
+    "ctf",
+    "ropgadget",
+    "rop",
+    "x64",
+    "x86",
+    "arm",
+    "arm64",
+    "pe",
+    "elf",
+    "macho",
+]
+include = ["/Cargo.toml", "/LICENSE", "README.md", "/src/**", "/examples/**"]
 
 [dependencies]
 goblin = "0.8.0"
-capstone = "0.11.0"
+capstone = "0.12.0"
 clap = { version = "4.0.29", features = ["derive"] }
 colored = "2"
 bitflags = "2.4.2"
 log = { version = "0.4.11", features = ["std"] }
+
+[lib]
+crate-type = ["dylib", "rlib"]
+
+[[example]]
+name = "rp-rs"

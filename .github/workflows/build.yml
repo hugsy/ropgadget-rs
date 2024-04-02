@@ -1,15 +1,19 @@
-name: CI Build
+name: Build
 
 on:
   push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
   workflow_dispatch:
 
 env:
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
   PROJECT_NAME: "ropgadget-rs"
   REPO: hugsy/ropgadget-rs
-  VERBOSE: "1"
+  VERBOSE: 1
   RUST_BACKTRACE: 1
+  DEBUG_IN_CI: 0
 
 jobs:
   build:
@@ -31,12 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: Inject slug/short variables
-        uses: rlespinasse/github-slug-action@v4
+        uses: actions/checkout@v4.1.1
 
       - name: Install prerequisites
         shell: bash
@@ -67,65 +66,72 @@ jobs:
         if: ${{ matrix.job.os != 'windows-latest' }}
         run: |
           case ${{ matrix.job.use-cross }} in
-            true) cargo install cross; cross build --release --target=${{ matrix.job.target }} ;;
-            false) cargo build --release --target=${{ matrix.job.target }} ;;
-            *) echo "Unknown ${{ matrix.job.use-cross }}"; exit 1 ;;
+            true)
+              cargo install cross
+              cross build --release --lib --target=${{ matrix.job.target }}
+              cross build --example rp-rs --release --target=${{ matrix.job.target }}
+              ;;
+
+            false)
+              cargo build --release --lib --target=${{ matrix.job.target }}
+              cargo build --example rp-rs --release --target=${{ matrix.job.target }}
+              ;;
+
+            *)
+              echo "Unknown ${{ matrix.job.use-cross }}"
+              exit 1
+              ;;
           esac
 
       - name: Build (Windows)
         if: ${{ matrix.job.os == 'windows-latest' }}
         run: |
-          cargo build --release --target=${{ matrix.job.target }}
+          cargo build --release --lib
+          cargo build --release --target=${{ matrix.job.target }} --example rp-rs
 
-      - name: Prepare artifact
-        shell: bash
-        run: |
-          mkdir build
-          cargo install --path . --root build
+      - name: Run Interactive CI Debugger
+        if: ${{ matrix.job.os == 'ubuntu-latest' && env.DEBUG_IN_CI == '1' }}
+        run: curl -sSf https://sshx.io/get | sh -s run
+
 
       - name: Publish artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.3.1
         with:
-          name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ env.GITHUB_SHA_SHORT }}
-          path: build/bin
+          name: ${{ env.PROJECT_NAME}}_${{ matrix.job.name }}_${{ github.sha }}
+          path: |
+            target/debug/examples/rp-rs*
+            target/debug/libropgadget_rs.*
+            target/release/examples/rp-rs*
+            target/release/libropgadget_rs.*
 
   notify:
-    runs-on: 'ubuntu-22.04'
+    runs-on: ubuntu-latest
     needs: build
     steps:
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
     - name: Send Discord notification
       env:
-        COMMIT_URL: "https://github.com/${{ env.REPO }}/commit/${{ env.GITHUB_SHA_SHORT }}"
+        COMMIT_URL: "https://github.com/${{ env.REPO }}/commit/${{ github.sha }}"
         RUN_URL: "https://github.com/${{ env.REPO }}/actions/runs/${{ github.run_id }}"
-        BRANCH_URL: "https://github.com/${{ env.REPO }}/tree/${{ env.GITHUB_REF_SLUG }}"
+        BRANCH_URL: "https://github.com/${{ env.REPO }}/tree/${{ github.ref_name }}"
         AUTHOR_URL: "https://github.com/${{ github.actor }}"
-      uses: sarisia/actions-status-discord@v1.10.0
+        AVATAR_URL: "https://camo.githubusercontent.com/9ddce666945f8c507d7c9a83aaa0518b36a47fa1fd9e823e061ed4753e7becdc/68747470733a2f2f692e696d6775722e636f6d2f7a6a63787956662e706e67"
+      uses: sarisia/actions-status-discord@v1.14.0
       with:
         nodetail: true
-        title: 🚧 Build `${{ env.GITHUB_SHA_SHORT }}` for `${{ env.REPO }}` 🚧
+        title: 🚧 Build `${{ github.sha }}` for `${{ env.REPO }}` 🚧
         description: |
-          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ env.GITHUB_SHA_SHORT }}` initiated by [${{ github.actor }}](${{ env.AUTHOR_URL }}):
-          ● Commit [${{ env.GITHUB_SHA_SHORT }}](${{ env.COMMIT_URL }})
-          ● Branch [`${{ env.GITHUB_REF_SLUG }}`](${{ env.BRANCH_URL }})
-          ● [Detail Page](${{ env.RUN_URL }})
-        color: 0x0000ff
+          [Job #${{ github.run_number }}](${{ env.RUN_URL }}): CI build `${{ github.sha }}` initiated by [${{ github.actor }}](${{ env.AUTHOR_URL }}) was successful
+
+        color: 0x00ff00
         username: ${{ github.actor }} via GithubBot
-        avatar_url: ${{ github.actor.avatar_url }}
+        avatar_url: ${{ env.AVATAR_URL }}
 
   test:
-    runs-on: 'ubuntu-22.04'
+    runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-
-      - name: cargo check
-        run: cargo check
-
-      - name: cargo test
-        run: cargo test
+      - uses: actions/checkout@v4.1.1
+      - run: cargo fmt
+      - run: cargo check
+      - run: cargo test
 

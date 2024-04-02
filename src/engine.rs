@@ -10,9 +10,18 @@ use crate::gadget::{Instruction, InstructionGroup};
  *
  */
 
+#[derive(Debug, Default)]
 pub enum DisassemblyEngineType {
+    #[default]
+    Invalid,
     Capstone,
 }
+
+// impl Default for DisassemblyEngineType {
+//     fn default() -> Self {
+//         DisassemblyEngineType::Invalid
+//     }
+// }
 
 //
 // All disassembler must implement this trait
@@ -36,6 +45,7 @@ impl DisassemblyEngine {
             DisassemblyEngineType::Capstone => Self {
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
+            DisassemblyEngineType::Invalid => panic!(),
         }
     }
 }
@@ -116,6 +126,8 @@ impl CapstoneDisassembler {
                 .detail(true)
                 .build()
                 .expect("Failed to create Capstone object"),
+
+            CpuType::Unknown => panic!(),
         };
 
         Self { cs }
@@ -124,7 +136,7 @@ impl CapstoneDisassembler {
     fn cs_disassemble(&self, code: &Vec<u8>, address: u64) -> Option<Vec<Instruction>> {
         let cs_insns = self
             .cs
-            .disasm_all(&code, address)
+            .disasm_all(code, address)
             .expect("Failed to disassemble");
 
         //
@@ -141,7 +153,7 @@ impl CapstoneDisassembler {
         let mut candidates: Vec<Instruction> = Vec::new();
 
         for cs_insn in cs_insns.iter() {
-            let detail: InsnDetail = self.cs.insn_detail(&cs_insn).unwrap();
+            let detail: InsnDetail = self.cs.insn_detail(cs_insn).unwrap();
 
             let mut insn_group = InstructionGroup::Undefined;
 
@@ -161,17 +173,13 @@ impl CapstoneDisassembler {
 
             let mnemonic = cs_insn.mnemonic().unwrap().to_string();
 
-            let operands: Option<String> = match cs_insn.op_str() {
-                // todo: do better parsing on args
-                Some(op) => Some(op.to_string()),
-                None => None,
-            };
+            let operands: Option<String> = cs_insn.op_str().map(|op| op.to_string());
 
             let insn = Instruction {
                 raw: cs_insn.bytes().to_vec(),
                 size: cs_insn.bytes().len(),
-                mnemonic: mnemonic,
-                operands: operands,
+                mnemonic,
+                operands,
                 address: cs_insn.address(),
                 group: insn_group,
             };
@@ -186,17 +194,17 @@ impl CapstoneDisassembler {
         for insn in candidates.into_iter().rev() {
             match insn.group {
                 InstructionGroup::Jump => {
-                    if insns.len() > 0 {
+                    if !insns.is_empty() {
                         break;
                     }
                 }
                 InstructionGroup::Call => {
-                    if insns.len() > 0 {
+                    if !insns.is_empty() {
                         break;
                     }
                 }
                 InstructionGroup::Ret => {
-                    if insns.len() > 0 {
+                    if !insns.is_empty() {
                         break;
                     }
                 }
