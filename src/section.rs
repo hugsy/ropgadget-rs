@@ -1,5 +1,9 @@
 use std::{borrow::Borrow, fmt};
 
+use crate::format::pe::{
+    PeCharacteristics, IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
+};
+
 bitflags! {
     #[derive(Debug)]
     pub struct Permission: u8
@@ -20,8 +24,23 @@ impl Default for Permission {
     }
 }
 
-#[derive(Debug)]
-#[derive(Default)]
+impl From<PeCharacteristics> for Permission {
+    fn from(value: PeCharacteristics) -> Self {
+        let mut perm = Permission::default();
+        if value & IMAGE_SCN_MEM_READ != 0 {
+            perm |= Permission::READABLE;
+        }
+        if value & IMAGE_SCN_MEM_WRITE != 0 {
+            perm |= Permission::WRITABLE;
+        }
+        if value & IMAGE_SCN_MEM_EXECUTE != 0 {
+            perm |= Permission::EXECUTABLE;
+        }
+        perm
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct Section {
     pub start_address: u64,
     pub end_address: u64,
@@ -32,15 +51,10 @@ pub struct Section {
 
 impl fmt::Display for Section {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let name = self
-            .name
-            .as_ref()
-            .unwrap_or(String::from("N/A").borrow())
-            .clone();
         write!(
             f,
-            "Section(name='{}', start={:#x}, sz={:#x}, permission={:?})",
-            name,
+            "Section(name='{:?}', start={:#x}, sz={:#x}, permission={:?})",
+            self.name,
             self.start_address,
             self.size(),
             self.permission
@@ -76,8 +90,6 @@ impl Section {
         Self { data, ..self }
     }
 }
-
-
 
 impl From<&goblin::elf::section_header::SectionHeader> for Section {
     fn from(value: &goblin::elf::section_header::SectionHeader) -> Self {

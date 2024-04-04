@@ -7,12 +7,12 @@ use std::{fs, path::PathBuf};
 use crate::{common::GenericResult, cpu::CpuType, error::Error, section::Section};
 
 use clap::ValueEnum;
-use goblin::Object;
+// use goblin::Object;
 
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Default)]
+#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum FileFormat {
-    #[default]
-    Auto,
+    // #[default]
+    // Auto,
     Pe,
     Elf,
     MachO,
@@ -25,7 +25,7 @@ impl std::fmt::Display for FileFormat {
             FileFormat::Pe => "PE",
             FileFormat::Elf => "ELF",
             FileFormat::MachO => "MachO",
-            _ => panic!("Invalid FileFormat"),
+            // _ => panic!("Invalid FileFormat"),
         };
 
         write!(f, "BinaryFormat={}", val)
@@ -34,7 +34,7 @@ impl std::fmt::Display for FileFormat {
 
 /// Trait specific to executable files
 pub trait ExecutableFileFormat: Send + Sync {
-    fn path(&self) -> &PathBuf;
+    // fn path(&self) -> &PathBuf;
 
     fn format(&self) -> FileFormat;
 
@@ -53,22 +53,37 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableFile
         return Err(Error::InvalidFileError);
     }
 
-    let buffer = match fs::read(file.as_path()) {
-        Ok(buf) => buf,
-        Err(_) => return Err(Error::InvalidFileError),
-    };
+    let buffer = fs::read(file.as_path())?;
+    // let parsed = match Object::parse(&buffer) {
+    //     Ok(e) => e,
+    //     Err(_) => return Err(Error::InvalidFileError),
+    // };
 
-    let parsed = match Object::parse(&buffer) {
-        Ok(e) => e,
-        Err(_) => return Err(Error::InvalidFileError),
-    };
-
-    match parsed {
-        Object::PE(obj) => Ok(Box::new(pe::Pe::new(file.to_path_buf(), obj))),
-        Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
-        Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
-        Object::Archive(_) => Err(Error::InvalidFileError),
-        Object::Unknown(_) => Err(Error::InvalidFileError),
+    match try_parse(&buffer)? {
+        // Object::PE(_) => Ok(Box::new(pe::Pe::new(file.to_path_buf())?)),
+        FileFormat::Pe => Ok(Box::new(pe::Pe::new(&buffer)?)),
+        // Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
+        // Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
+        // Object::Archive(_) => Err(Error::InvalidFileError),
+        // Object::Unknown(_) => Err(Error::InvalidFileError),
         _ => Err(Error::InvalidFileError),
+    }
+}
+
+pub fn try_parse(buf: &[u8]) -> GenericResult<FileFormat> {
+    match buf.get(0..4) {
+        Some(magic) => {
+            println!("{:?}", magic);
+            if &magic[0..pe::IMAGE_DOS_SIGNATURE.len()] == pe::IMAGE_DOS_SIGNATURE {
+                Ok(FileFormat::Pe)
+            } else if &magic[0..elf::ELF_HEADER_MAGIC.len()] == elf::ELF_HEADER_MAGIC {
+                Ok(FileFormat::Elf)
+            } else if &magic[0..mach::MACHO_HEADER_MAGIC.len()] == mach::MACHO_HEADER_MAGIC {
+                Ok(FileFormat::MachO)
+            } else {
+                Err(Error::InvalidMagicParsingError)
+            }
+        }
+        None => Err(Error::InvalidFileError),
     }
 }

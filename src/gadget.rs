@@ -52,9 +52,7 @@ impl Instruction {
             true => {
                 format!("{}", self.mnemonic.cyan())
             }
-            false => {
-                self.mnemonic.to_string()
-            }
+            false => self.mnemonic.to_string(),
         };
 
         let op = match &self.operands {

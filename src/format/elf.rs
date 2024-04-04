@@ -11,9 +11,11 @@ use crate::{format::FileFormat, section::Section};
 
 use super::ExecutableFileFormat;
 
+pub const ELF_HEADER_MAGIC: &[u8] = b"\x7fELF";
+
 #[derive(Debug)]
 pub struct Elf {
-    path: PathBuf,
+    // path: PathBuf,
     sections: Vec<Section>,
     // cpu: Box<dyn cpu::Cpu>,
     cpu_type: cpu::CpuType,
@@ -88,7 +90,7 @@ impl Elf {
         // };
 
         Self {
-            path: path.clone(),
+            // path: path.clone(),
             sections: executable_sections,
             cpu_type: cpu::CpuType::from(&obj.header),
             entry_point: obj.entry,
@@ -97,9 +99,9 @@ impl Elf {
 }
 
 impl ExecutableFileFormat for Elf {
-    fn path(&self) -> &PathBuf {
-        &self.path
-    }
+    // fn path(&self) -> &PathBuf {
+    //     &self.path
+    // }
 
     fn format(&self) -> FileFormat {
         FileFormat::Elf

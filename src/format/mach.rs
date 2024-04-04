@@ -11,8 +11,10 @@ use crate::{format::FileFormat, section::Permission, section::Section};
 
 use super::ExecutableFileFormat;
 
+pub const MACHO_HEADER_MAGIC: &[u8] = b"\xce\xfa\xed\xfe";
+
 pub struct Mach {
-    path: PathBuf,
+    // path: PathBuf,
     sections: Vec<Section>,
     cpu_type: cpu::CpuType,
     entry_point: u64,
@@ -80,7 +82,7 @@ impl Mach {
         // };
 
         Self {
-            path: path.clone(),
+            // path: path.clone(),
             sections: executable_sections,
             cpu_type: cpu::CpuType::from(&bin.header),
             entry_point: bin.entry,
@@ -89,9 +91,9 @@ impl Mach {
 }
 
 impl ExecutableFileFormat for Mach {
-    fn path(&self) -> &PathBuf {
-        &self.path
-    }
+    // fn path(&self) -> &PathBuf {
+    //     &self.path
+    // }
 
     fn format(&self) -> FileFormat {
         FileFormat::MachO

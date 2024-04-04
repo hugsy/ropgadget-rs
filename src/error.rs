@@ -1,9 +1,13 @@
 #[derive(Debug)]
 pub enum Error {
+    UnknownError,
     IoError(std::io::Error),
     ParsingError(goblin::error::Error),
     ThreadRuntimeError(std::boxed::Box<dyn std::any::Any + std::marker::Send>),
     InvalidFileError,
+    InvalidMagicParsingError,
+    InvalidStructureParsingError,
+    UnsupportedCpuError,
 }
 
 #[derive(Debug)]

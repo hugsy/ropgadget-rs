@@ -25,7 +25,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let info = &sess.info;
     let start_timestamp = std::time::Instant::now();
     let sections = info.format.sections();
-    
+
     let use_color = sess.use_color;
     let unique_only = sess.unique_only;
     let chosen_output_format = sess.output.clone();
@@ -44,7 +44,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let arc = Arc::new(sess);
     match session::find_gadgets(arc.clone()) {
         Ok(_) => {
-            dbg!("Done collecting gadgets");
+            debug!("Done collecting gadgets");
         }
         Err(e) => {
             error!("An error occured while collecting gadgets: {:?}", e);
