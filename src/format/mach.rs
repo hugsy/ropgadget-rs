@@ -99,7 +99,7 @@ impl ExecutableFileFormat for Mach {
         FileFormat::MachO
     }
 
-    fn sections(&self) -> &Vec<Section> {
+    fn executable_sections(&self) -> &Vec<Section> {
         &self.sections
     }
 

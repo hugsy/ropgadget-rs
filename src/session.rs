@@ -1,11 +1,10 @@
-use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use clap::ValueEnum;
 use colored::*;
-use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
+use log::{debug, error, info, warn, Level, LevelFilter, Metadata, Record};
 
 use crate::common::GenericResult;
 use crate::cpu;
@@ -40,8 +39,7 @@ impl std::fmt::Debug for ExecutableDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExecutableDetails")
             .field("filepath", &self.filepath)
-            .field("format", &self.format.format().to_string())
-            .field("cpu", &self.cpu.cpu_type().to_string())
+            .field("format", &self.format)
             .finish()
     }
 }
@@ -69,9 +67,9 @@ impl Default for ExecutableDetails {
 }
 
 impl ExecutableDetails {
-    pub fn new(filepath: PathBuf) -> Self {
-        let fpath = filepath.clone();
-        let format = guess_file_format(&fpath).unwrap();
+    pub fn new(filepath: PathBuf) -> GenericResult<Self> {
+        let fpath = filepath;
+        let format = guess_file_format(&fpath)?;
 
         let cpu: Box<dyn cpu::Cpu> = match format.cpu_type() {
             cpu::CpuType::X86 => Box::new(cpu::x86::X86 {}),
@@ -82,11 +80,11 @@ impl ExecutableDetails {
         };
         // let cpu = Box::new( Cpu::from(format.cpu_type()) );
 
-        ExecutableDetails {
+        Ok(ExecutableDetails {
             filepath: fpath,
             cpu,
             format,
-        }
+        })
     }
 
     pub fn is_64b(&self) -> bool {
@@ -95,10 +93,16 @@ impl ExecutableDetails {
 }
 
 #[derive(Debug, Clone, Default)]
+/// The different types of outputting gadgets
 pub enum RopGadgetOutput {
-    #[default]
+    /// No output, useful for testing & performance
     None,
+
+    #[default]
+    /// Output gadgets to stdout
     Console,
+
+    /// Output gadgets to file
     File(PathBuf),
 }
 
@@ -156,8 +160,13 @@ pub struct Session {
 
 impl Session {
     pub fn new(filepath: PathBuf) -> Self {
+        let info = match ExecutableDetails::new(filepath) {
+            Ok(i) => i,
+            Err(_) => panic!("Session initialization (ExecutableDetails) failed"),
+        };
+
         Session {
-            info: ExecutableDetails::new(filepath),
+            info,
             ..Default::default()
         }
     }
@@ -240,7 +249,7 @@ impl std::fmt::Display for Session {
 ///
 pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     let info = &session.info;
-    let number_of_sections = info.format.sections().len();
+    let number_of_sections = info.format.executable_sections().len();
     let nb_thread = session.nb_thread as usize;
 
     debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
@@ -249,11 +258,17 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     // Multithread parsing of each section
     //
     for section_idx in 0..number_of_sections {
-        if info.format.sections().get(section_idx).is_none() {
-            continue;
-        }
+        // if info.format.executable_sections().get(section_idx).is_none() {
+        //     continue;
+        // }
 
-        let section = info.format.sections().get(section_idx).unwrap();
+        let section = match info.format.executable_sections().get(section_idx) {
+            Some(s) => s,
+            _ => {
+                error!("failed to get section");
+                return Err(crate::error::Error::InvalidFileError);
+            }
+        };
         let chunk_size = section.data.len() / nb_thread;
 
         //
@@ -271,10 +286,19 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
             if thread_pool_size == nb_thread || force_flush {
                 for curthread in threads {
                     debug!("Joining {:?}...", curthread.thread().id());
-                    let gadgets = curthread.join().unwrap();
-                    {
-                        let mut data = session.gadgets.lock().unwrap();
-                        data.extend(gadgets);
+                    match curthread.join() {
+                        Ok(result) => match session.gadgets.lock() {
+                            Ok(mut data) => data.extend(result),
+                            Err(e) => {
+                                error!("Error on unlocking result vector: {:?}", e);
+                                break;
+                            }
+                        },
+
+                        Err(e) => {
+                            error!("Error on thread join: {:?}", e);
+                            break;
+                        }
                     }
                 }
 
@@ -332,46 +356,49 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
     );
 
     let mut gadgets: Vec<Gadget> = Vec::new();
-    let sections = session.info.format.sections();
+    let sections = session.info.format.executable_sections();
     if let Some(section) = sections.get(index) {
-        let section_name = section
-            .name
-            .as_ref()
-            .unwrap_or(String::from("N/A").borrow())
-            .clone();
-
-        debug!(
-            "{:?}: Processing section '{}'",
+        println!(
+            "{:?}: Processing section '{:?}'",
             thread::current().id(),
-            section_name
+            &section.name
         );
 
         let cpu = &session.info.cpu;
         let disass = engine.disassembler.as_ref();
 
-        for (pos, len) in
-            get_all_valid_positions_and_length(&session, cpu, section, cursor).unwrap()
-        {
-            debug!(
-                "{:?}: Processing Section {}[..{:x}+{:x}] (size={:x})",
+        let chunks = match get_all_valid_positions_and_length(&session, cpu, section, cursor) {
+            Ok(e) => e,
+            Err(e) => {
+                error!("error in `get_all_valid_positions_and_length`: {:?}", e);
+                // TODO use errors
+                return Vec::default();
+            }
+        };
+
+        for (pos, len) in chunks {
+            println!(
+                "{:?}: Processing Section {:?}[..{:x}+{:x}] (size={:x})",
                 thread::current().id(),
-                section_name,
+                &section.name,
                 pos,
                 len,
                 section.size(),
             );
 
-            let res = find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu);
-            if res.is_ok() {
-                let mut gadget = res.unwrap();
-                gadgets.append(&mut gadget);
+            match find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu) {
+                Ok(mut g) => gadgets.append(&mut g),
+                Err(e) => {
+                    println!("error in `find_gadgets_from_position`: {:?}", e);
+                    break;
+                }
             }
         }
 
         debug!(
-            "{:?}: Finished processing section '{}'",
+            "{:?}: Finished processing section '{:?}'",
             thread::current().id(),
-            section_name,
+            &section.name,
         );
     } else {
         warn!(

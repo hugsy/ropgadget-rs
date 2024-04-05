@@ -21,14 +21,14 @@ pub enum FileFormat {
 
 impl std::fmt::Display for FileFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let val = match self {
-            FileFormat::Pe => "PE",
-            FileFormat::Elf => "ELF",
-            FileFormat::MachO => "MachO",
-            // _ => panic!("Invalid FileFormat"),
-        };
+        // let val = match self {
+        //     FileFormat::Pe => "PE",
+        //     FileFormat::Elf => "ELF",
+        //     FileFormat::MachO => "MachO",
+        //     // _ => panic!("Invalid FileFormat"),
+        // };
 
-        write!(f, "BinaryFormat={}", val)
+        write!(f, "{:?}", &self)
     }
 }
 
@@ -38,13 +38,30 @@ pub trait ExecutableFileFormat: Send + Sync {
 
     fn format(&self) -> FileFormat;
 
-    fn sections(&self) -> &Vec<Section>;
+    fn executable_sections(&self) -> &Vec<Section>;
 
     // fn cpu(&self) -> &dyn cpu::Cpu;
 
     fn cpu_type(&self) -> CpuType;
 
     fn entry_point(&self) -> u64;
+}
+
+impl std::fmt::Display for dyn ExecutableFileFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self)
+    }
+}
+
+impl std::fmt::Debug for dyn ExecutableFileFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExecutableFileFormat")
+            .field("format", &self.format().to_string())
+            .field("executable_sections", &self.executable_sections().len())
+            .field("cpu_type", &self.cpu_type())
+            .field("entry_point", &self.entry_point())
+            .finish()
+    }
 }
 
 /// Attempt to determine the file
@@ -73,7 +90,6 @@ pub fn guess_file_format(file: &PathBuf) -> GenericResult<Box<dyn ExecutableFile
 pub fn try_parse(buf: &[u8]) -> GenericResult<FileFormat> {
     match buf.get(0..4) {
         Some(magic) => {
-            println!("{:?}", magic);
             if &magic[0..pe::IMAGE_DOS_SIGNATURE.len()] == pe::IMAGE_DOS_SIGNATURE {
                 Ok(FileFormat::Pe)
             } else if &magic[0..elf::ELF_HEADER_MAGIC.len()] == elf::ELF_HEADER_MAGIC {

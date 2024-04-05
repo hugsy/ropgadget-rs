@@ -46,11 +46,11 @@ impl cpu::Cpu for X86 {
     }
 }
 
-impl std::fmt::Debug for X86 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("X86").finish()
-    }
-}
+// impl std::fmt::Debug for X86 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("X86").finish()
+//     }
+// }
 
 pub struct X64;
 
@@ -104,8 +104,8 @@ impl cpu::Cpu for X64 {
     }
 }
 
-impl std::fmt::Debug for X64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("X64").finish()
-    }
-}
+// impl std::fmt::Debug for X64 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("X64").finish()
+//     }
+// }

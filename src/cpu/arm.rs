@@ -9,7 +9,6 @@ impl cpu::Cpu for Arm {
 
     fn ptrsize(&self) -> usize {
         4
-        // TODO: thumb
     }
 
     fn ret_insns(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -43,11 +42,11 @@ impl cpu::Cpu for Arm {
     }
 }
 
-impl std::fmt::Debug for Arm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Arm").finish()
-    }
-}
+// impl std::fmt::Debug for Arm {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Arm").finish()
+//     }
+// }
 
 pub struct Arm64;
 
@@ -108,8 +107,8 @@ impl cpu::Cpu for Arm64 {
     }
 }
 
-impl std::fmt::Debug for Arm64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Arm64").finish()
-    }
-}
+// impl std::fmt::Debug for Arm64 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Arm64").finish()
+//     }
+// }

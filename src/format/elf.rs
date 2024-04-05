@@ -107,7 +107,7 @@ impl ExecutableFileFormat for Elf {
         FileFormat::Elf
     }
 
-    fn sections(&self) -> &Vec<Section> {
+    fn executable_sections(&self) -> &Vec<Section> {
         &self.sections
     }
 

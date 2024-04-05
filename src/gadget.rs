@@ -1,6 +1,6 @@
 extern crate capstone;
 
-use std::cmp::Ordering;
+use std::borrow::Borrow;
 use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
@@ -135,40 +135,57 @@ impl Gadget {
     }
 }
 
+//
+// Search for a given group of opcodes in the memory chunks.
+// It effectively split the memory chunk into a vector a [position; length]
+// matching the opcode pattern (i.e. bytes & mask)
+//
 fn collect_previous_instructions(
     session: &Arc<Session>,
     group: &Vec<(Vec<u8>, Vec<u8>)>,
     memory_chunk: &Vec<u8>,
 ) -> GenericResult<Vec<(usize, usize)>> {
-    let mut res: Vec<(usize, usize)> = Vec::new();
+    let mut out = Vec::<(usize, usize)>::new();
 
-    for (opcodes, mask) in group {
-        let sz = opcodes.len();
-
-        let mut v: Vec<(usize, usize)> = memory_chunk
-            .windows(sz)
+    for (bytes, mask) in group {
+        //
+        // For each possible opcode:
+        // - inspect the memory memory chunk
+        // - split into chunks of a length of the opcode, and enumerate
+        // them to add an index
+        // - map each byte of the "sub-chunk" and AND-it with the mask from the
+        // pattern group, and finally compare the result to the bytes from the
+        // pattern
+        // - filter the matches, and collect them into a result vector
+        //
+        let bytes_length = bytes.len();
+        let chunks: Vec<(usize, usize)> = memory_chunk
+            .windows(bytes_length)
             .enumerate()
-            .filter(|(_, y)| {
-                y.iter()
+            .filter(|(_, chunk)| {
+                chunk
+                    .iter()
                     .enumerate()
-                    .map(|(i, z)| z & mask[i])
-                    .cmp(opcodes.to_owned())
-                    == Ordering::Equal
+                    .map(|(i, byte)| byte & mask[i])
+                    .cmp(bytes.to_owned())
+                    .is_eq()
             })
-            .map(|(x, _)| (x, sz))
+            .map(|(pos, _)| (pos, bytes_length))
             .collect();
 
-        res.append(&mut v);
+        if chunks.len() > 0 {
+            out.extend(chunks);
 
-        match session.profile_type {
-            RopProfileStrategy::Fast => {
-                break;
+            match session.profile_type {
+                RopProfileStrategy::Fast => {
+                    break;
+                }
+                RopProfileStrategy::Complete => {}
             }
-            _ => {}
         }
     }
 
-    Ok(res)
+    Ok(out)
 }
 
 pub fn get_all_valid_positions_and_length(
@@ -179,28 +196,24 @@ pub fn get_all_valid_positions_and_length(
 ) -> GenericResult<Vec<(usize, usize)>> {
     let data = &section.data[cursor..].to_vec();
 
-    let mut groups = Vec::new();
-
-    for gadget_type in &session.gadget_types {
-        match gadget_type {
-            InstructionGroup::Ret => {
-                debug!("inserting ret positions and length...");
-                groups.append(&mut cpu.ret_insns().clone());
-            }
-            InstructionGroup::Call => {
-                debug!("inserting call positions and length...");
-                groups.append(&mut cpu.call_insns().clone());
-            }
-            InstructionGroup::Jump => {
-                debug!("inserting jump positions and length...");
-                groups.append(&mut cpu.jmp_insns().clone());
-            }
-            InstructionGroup::Int => todo!(),
-            InstructionGroup::Iret => todo!(),
-            InstructionGroup::Privileged => todo!(),
-            InstructionGroup::Undefined => todo!(),
+    let groups = match session.gadget_types.first().unwrap() {
+        InstructionGroup::Ret => {
+            debug!("inserting ret positions and length...");
+            cpu.ret_insns()
         }
-    }
+        InstructionGroup::Call => {
+            debug!("inserting call positions and length...");
+            cpu.call_insns()
+        }
+        InstructionGroup::Jump => {
+            debug!("inserting jump positions and length...");
+            cpu.jmp_insns()
+        }
+        InstructionGroup::Int => todo!(),
+        InstructionGroup::Iret => todo!(),
+        InstructionGroup::Privileged => todo!(),
+        InstructionGroup::Undefined => todo!(),
+    };
 
     collect_previous_instructions(session, &groups, data)
 }

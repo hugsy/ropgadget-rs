@@ -2,9 +2,9 @@
 ///! Basic implementation of a PE parser, supports x86/64 to extract quickly the sections
 ///!
 use std::convert::TryInto;
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
+// use std::fs::File;
+// use std::io::Read;
+// use std::path::PathBuf;
 use std::{fmt, mem};
 
 // use goblin;
@@ -21,7 +21,7 @@ use super::ExecutableFileFormat;
 #[derive(Debug, Default)]
 pub struct Pe {
     // path: PathBuf,
-    pub sections: Vec<Section>,
+    pub executable_sections: Vec<Section>,
     // cpu: Box<dyn cpu::Cpu>,
     pub entry_point: u64,
     cpu_type: cpu::CpuType,
@@ -163,6 +163,8 @@ const IMAGE_NT_HEADER_SIZE: usize = mem::size_of::<ImageFileHeader>();
 pub const IMAGE_FILE_MACHINE_I386: u16 = 0x014c;
 pub const IMAGE_FILE_MACHINE_X86_64: u16 = 0x8664;
 pub const IMAGE_FILE_MACHINE_ARM64: u16 = 0xaa64;
+pub const IMAGE_FILE_MACHINE_ARMNT: u16 = 0x1c4;
+
 pub const IMAGE_SCN_MEM_EXECUTE: u32 = 0x20000000;
 pub const IMAGE_SCN_MEM_READ: u32 = 0x40000000;
 pub const IMAGE_SCN_MEM_WRITE: u32 = 0x80000000;
@@ -231,6 +233,7 @@ impl<'a> PeParser<'a> {
                 IMAGE_FILE_MACHINE_I386 => Ok(cpu::CpuType::X86),
                 IMAGE_FILE_MACHINE_X86_64 => Ok(cpu::CpuType::X64),
                 IMAGE_FILE_MACHINE_ARM64 => Ok(cpu::CpuType::ARM64),
+                IMAGE_FILE_MACHINE_ARMNT => Ok(cpu::CpuType::ARM),
                 _ => Err(error::Error::UnsupportedCpuError),
             }
         }?;
@@ -285,9 +288,12 @@ impl<'a> PeParser<'a> {
 
         let opt_hdrs = pe_header.get(IMAGE_NT_HEADER_SIZE..).unwrap();
         let image_base_off = match machine {
-            cpu::CpuType::X86 => mem::offset_of!(ImageOptionalHeader32, image_base),
-            cpu::CpuType::X64 => mem::offset_of!(ImageOptionalHeader64, image_base),
-            cpu::CpuType::ARM64 => mem::offset_of!(ImageOptionalHeader64, image_base),
+            cpu::CpuType::X86 | cpu::CpuType::ARM => {
+                mem::offset_of!(ImageOptionalHeader32, image_base)
+            }
+            cpu::CpuType::X64 | cpu::CpuType::ARM64 => {
+                mem::offset_of!(ImageOptionalHeader64, image_base)
+            }
             _ => unreachable!(),
         } as usize;
 
@@ -298,9 +304,13 @@ impl<'a> PeParser<'a> {
         ) as u64;
 
         let entry_point_off = match machine {
-            cpu::CpuType::X86 => mem::offset_of!(ImageOptionalHeader32, address_of_entry_point),
-            cpu::CpuType::X64 => mem::offset_of!(ImageOptionalHeader64, address_of_entry_point),
-            cpu::CpuType::ARM64 => mem::offset_of!(ImageOptionalHeader64, address_of_entry_point),
+            cpu::CpuType::X86 | cpu::CpuType::ARM => {
+                mem::offset_of!(ImageOptionalHeader32, address_of_entry_point)
+            }
+
+            cpu::CpuType::X64 | cpu::CpuType::ARM64 => {
+                mem::offset_of!(ImageOptionalHeader64, address_of_entry_point)
+            }
             _ => unreachable!(),
         } as usize;
 
@@ -483,7 +493,7 @@ impl Pe {
         let executable_sections = pe
             .sections()?
             .into_iter()
-            .filter(|s| s.permission.contains(Permission::EXECUTABLE))
+            .filter(|s| s.is_executable())
             .collect();
 
         debug!("{:?}", &executable_sections);
@@ -535,7 +545,7 @@ impl Pe {
 
         Ok(Self {
             // path: path.clone(),
-            sections: executable_sections,
+            executable_sections,
             // cpu,
             cpu_type: machine,
             entry_point: entry_point,
@@ -553,8 +563,8 @@ impl ExecutableFileFormat for Pe {
         FileFormat::Pe
     }
 
-    fn sections(&self) -> &Vec<Section> {
-        &self.sections
+    fn executable_sections(&self) -> &Vec<Section> {
+        &self.executable_sections
     }
 
     // fn cpu(&self) -> &dyn cpu::Cpu {

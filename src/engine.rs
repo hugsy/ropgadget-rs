@@ -78,7 +78,6 @@ impl Disassembler for CapstoneDisassembler {
     }
 
     fn name(&self) -> String {
-        // todo: add version strings
         let (major, minor) = Capstone::lib_version();
         format!("Capstone-Engine({}.{})", major, minor)
     }
@@ -90,7 +89,7 @@ impl Disassembler for CapstoneDisassembler {
 
 impl std::fmt::Display for CapstoneDisassembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Disassembler({})", self.name())
+        write!(f, "{}", self.name())
     }
 }
 

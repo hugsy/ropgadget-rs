@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt};
+use std::fmt;
 
 use crate::format::pe::{
     PeCharacteristics, IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
@@ -89,6 +89,18 @@ impl Section {
     pub fn data(self, data: Vec<u8>) -> Self {
         Self { data, ..self }
     }
+
+    pub fn is_executable(&self) -> bool {
+        self.permission.contains(Permission::EXECUTABLE)
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.permission.contains(Permission::WRITABLE)
+    }
+
+    pub fn is_readable(&self) -> bool {
+        self.permission.contains(Permission::READABLE)
+    }
 }
 
 impl From<&goblin::elf::section_header::SectionHeader> for Section {
@@ -142,34 +154,34 @@ impl From<&goblin::mach::segment::Segment<'_>> for Section {
     }
 }
 
-impl From<&goblin::pe::section_table::SectionTable> for Section {
-    fn from(value: &goblin::pe::section_table::SectionTable) -> Self {
-        let section_name = match std::str::from_utf8(&value.name) {
-            Ok(v) => String::from(v).replace('\0', ""),
-            Err(_) => String::new(),
-        };
+// impl From<&goblin::pe::section_table::SectionTable> for Section {
+//     fn from(value: &goblin::pe::section_table::SectionTable) -> Self {
+//         let section_name = match std::str::from_utf8(&value.name) {
+//             Ok(v) => String::from(v).replace('\0', ""),
+//             Err(_) => String::new(),
+//         };
 
-        let mut perm = Permission::NONE;
-        if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
-            perm |= Permission::READABLE;
-        }
+//         let mut perm = Permission::NONE;
+//         if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
+//             perm |= Permission::READABLE;
+//         }
 
-        if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
-            perm |= Permission::WRITABLE;
-        }
+//         if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
+//             perm |= Permission::WRITABLE;
+//         }
 
-        if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE != 0 {
-            perm |= Permission::EXECUTABLE;
-        }
+//         if value.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE != 0 {
+//             perm |= Permission::EXECUTABLE;
+//         }
 
-        let sz = value.virtual_size as usize;
+//         let sz = value.virtual_size as usize;
 
-        Self {
-            start_address: value.virtual_address as u64,
-            end_address: (value.virtual_address + value.virtual_size) as u64,
-            name: Some(section_name),
-            permission: perm,
-            data: vec![0; sz],
-        }
-    }
-}
+//         Self {
+//             start_address: value.virtual_address as u64,
+//             end_address: (value.virtual_address + value.virtual_size) as u64,
+//             name: Some(section_name),
+//             permission: perm,
+//             data: vec![0; sz],
+//         }
+//     }
+// }
