@@ -1,8 +1,10 @@
 use colored::Colorize;
 use goblin;
 use log::debug;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::mem;
 use std::path::PathBuf;
 
 use crate::common::GenericResult;
@@ -32,6 +34,25 @@ struct ElfIdentHeader {
     ei_padd: u8,
     ei_padd4: u32,
     ei_padd8: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct ElfHeader32 {
+    e_ident: ElfIdentHeader,
+    e_type: u16,
+    e_machine: u16,
+    e_version: u32,
+    e_entry: u32,
+    e_phoff: u32,
+    e_shoff: u32,
+    e_flags: u32,
+    e_ehsize: u16,
+    e_phentsize: u16,
+    e_phnum: u16,
+    e_shentsize: u16,
+    e_shnum: u16,
+    e_shstrndx: u16,
 }
 
 #[repr(C)]
@@ -87,23 +108,27 @@ impl<'a> ElfParser<'a> {
             _ => return Err(error::Error::InvalidMagicParsingError),
         };
 
-        let is_64b = match elf_header.get(5) {
-            Some(val) => match *val {
-                ELF_CLASS_32 => false,
-                ELF_CLASS_64 => true,
-                _ => {
+        let is_64b = {
+            let ei_class_off = mem::offset_of!(ElfIdentHeader, ei_class);
+            match elf_header.get(ei_class_off) {
+                Some(val) => match *val {
+                    ELF_CLASS_32 => false,
+                    ELF_CLASS_64 => true,
+                    _ => {
+                        return Err(error::Error::InvalidFileError);
+                    }
+                },
+                None => {
                     return Err(error::Error::InvalidFileError);
                 }
-            },
-            None => {
-                return Err(error::Error::InvalidFileError);
             }
         };
 
         let machine = {
+            let ei_class_off = mem::offset_of!(ElfHeader64, e_machine);
             let machine = {
                 let mut dst = [0u8; 2];
-                dst.clone_from_slice(elf_header.get(18..20).unwrap());
+                dst.clone_from_slice(elf_header.get(ei_class_off..ei_class_off + 2).unwrap());
                 u16::from_le_bytes(dst)
             };
 
@@ -119,13 +144,50 @@ impl<'a> ElfParser<'a> {
             }
         }?;
 
+        let entrypoint = {
+            match is_64b {
+                true => {
+                    let e_entry_off = mem::offset_of!(ElfHeader64, e_entry);
+                    u64::from_le_bytes(elf_header[e_entry_off..e_entry_off + 8].try_into().unwrap())
+                }
+                false => {
+                    let e_entry_off = mem::offset_of!(ElfHeader32, e_entry);
+                    u32::from_le_bytes(elf_header[e_entry_off..e_entry_off + 4].try_into().unwrap())
+                        as u64
+                }
+            }
+        };
+
+        let number_of_sections = {
+            let e_shnum_off = match is_64b {
+                true => mem::offset_of!(ElfHeader64, e_shnum),
+                false => mem::offset_of!(ElfHeader32, e_shnum),
+            };
+            u16::from_le_bytes(elf_header[e_shnum_off..e_shnum_off + 2].try_into().unwrap())
+        } as usize;
+
+        let section_table_offset = {
+            match is_64b {
+                true => {
+                    let e_shoff_off = mem::offset_of!(ElfHeader64, e_shoff);
+                    u64::from_le_bytes(elf_header[e_shoff_off..e_shoff_off + 8].try_into().unwrap())
+                        as usize
+                }
+                false => {
+                    let e_shoff_off = mem::offset_of!(ElfHeader32, e_shoff);
+                    u32::from_le_bytes(elf_header[e_shoff_off..e_shoff_off + 4].try_into().unwrap())
+                        as usize
+                }
+            }
+        };
+
         Ok(ElfParser {
             bytes: elf_header,
             machine: machine,
-            number_of_sections: todo!(),
-            image_base: todo!(),
-            entry_point: todo!(),
-            section_table_offset: todo!(),
+            number_of_sections: number_of_sections,
+            image_base: 0,
+            entry_point: entrypoint,
+            section_table_offset: section_table_offset,
         })
     }
 }
