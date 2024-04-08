@@ -1,6 +1,6 @@
 extern crate capstone;
 
-use std::borrow::Borrow;
+// use std::borrow::Borrow;
 use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},

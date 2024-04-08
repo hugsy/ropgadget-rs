@@ -86,7 +86,7 @@ fn main() -> GenericResult<()> {
         .nb_thread(args.thread_num.into())
         .output(_output)
         .unique_only(args.unique)
-        .verbosity(verbosity)
+        // .verbosity(verbosity)
         .use_color(!args.no_color);
 
     info!("Created session: {:?}", sess);

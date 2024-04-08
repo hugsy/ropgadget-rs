@@ -185,7 +185,7 @@ mod tests {
 
         #[test]
         fn arm32_arm() {
-            for sz in ["small", "big"] {
+            for _ in ["small", "big"] {
                 // TODO find test files
                 // let res = tests::run_basic_test(sz, "arm32", FMT);
                 // assert!(res.len() > 0);
@@ -194,7 +194,7 @@ mod tests {
 
         #[test]
         fn arm32_thumb2() {
-            for sz in ["small", "big"] {
+            for _ in ["small", "big"] {
                 // TODO implement thumb2 mode
                 // let res = tests::run_basic_test(sz, "arm32-thumb2", FMT);
                 // assert!(res.len() > 0);
@@ -210,41 +210,41 @@ mod tests {
         }
     }
 
-    // mod elf {
-    //     use super::super::*;
-    //     const FMT: &str = "elf";
+    mod elf {
+        use super::super::*;
+        const FMT: &str = "elf";
 
-    //     #[test]
-    //     fn x86() {
-    //         for sz in ["small", "big"] {
-    //             let res = tests::run_basic_test(sz, "x86", FMT);
-    //             assert!(res.len() > 0);
-    //         }
-    //     }
+        #[test]
+        fn x86() {
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x86", FMT);
+                assert!(res.len() > 0);
+            }
+        }
 
-    //     #[test]
-    //     fn x64() {
-    //         for sz in ["small", "big"] {
-    //             let res = tests::run_basic_test(sz, "x64", FMT);
-    //             assert!(res.len() > 0);
-    //         }
-    //     }
+        #[test]
+        fn x64() {
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "x64", FMT);
+                assert!(res.len() > 0);
+            }
+        }
 
-    //     // #[test]
-    //     // fn arm32() {
-    //     //     for sz in ["big", "small"] {
-    //     //         let res = tests::run_basic_test(sz, "arm32", FMT);
-    //     //         assert!(res.len() > 0);
-    //     //     }
-    //     // }
-    //     #[test]
-    //     fn arm64() {
-    //         for sz in ["small", "big"] {
-    //             let res = tests::run_basic_test(sz, "arm64", FMT);
-    //             assert!(res.len() > 0);
-    //         }
-    //     }
-    // }
+        // #[test]
+        // fn arm32() {
+        //     for sz in ["big", "small"] {
+        //         let res = tests::run_basic_test(sz, "arm32", FMT);
+        //         assert!(res.len() > 0);
+        //     }
+        // }
+        #[test]
+        fn arm64() {
+            for sz in ["small", "big"] {
+                let res = tests::run_basic_test(sz, "arm64", FMT);
+                assert!(res.len() > 0);
+            }
+        }
+    }
 
     // mod macho {
     //     use super::super::*;

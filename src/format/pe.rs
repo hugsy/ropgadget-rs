@@ -5,8 +5,9 @@ use std::convert::TryInto;
 // use std::fs::File;
 // use std::io::Read;
 // use std::path::PathBuf;
-use std::{fmt, mem};
+use std::{default, fmt, mem};
 
+// use goblin::mach::segment::SectionIterator;
 // use goblin;
 use log::debug;
 
@@ -16,15 +17,20 @@ use crate::error::{self};
 // use crate::cpu;
 use crate::{format::FileFormat, section::Permission, section::Section};
 
-use super::ExecutableFileFormat;
+use super::{ExecutableFileFormat, SectionIterator};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Pe {
     // path: PathBuf,
-    pub executable_sections: Vec<Section>,
+    // pub executable_sections: Vec<Section>,
     // cpu: Box<dyn cpu::Cpu>,
-    pub entry_point: u64,
-    cpu_type: cpu::CpuType,
+    // pub entry_point: u64,
+    cpu_type: CpuType,
+    bytes: Vec<u8>,
+    number_of_sections: usize,
+    section_table_offset: usize,
+    entry_point: u64,
+    image_base: u64,
 }
 
 pub const IMAGE_DOS_SIGNATURE: &[u8] = b"MZ";
@@ -169,33 +175,374 @@ pub const IMAGE_SCN_MEM_EXECUTE: u32 = 0x20000000;
 pub const IMAGE_SCN_MEM_READ: u32 = 0x40000000;
 pub const IMAGE_SCN_MEM_WRITE: u32 = 0x80000000;
 
-#[derive(Default)]
-pub struct PeParser<'a> {
-    bytes: &'a [u8],
-    machine: CpuType,
-    number_of_sections: usize,
-    section_table_offset: usize,
-    image_base: u64,
-    pub entry_point: u64,
-}
+// #[derive(Default)]
+// struct Parser<'a> {
+//     bytes: &'a [u8],
+//     machine: CpuType,
+//     number_of_sections: usize,
+//     section_table_offset: usize,
+//     image_base: u64,
+//     entry_point: u64,
+// }
 
-impl<'a> fmt::Debug for PeParser<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PeParser [machine={}, number_of_sections={}, section_table_offset={}, image_base={:#x}, entry_point={:#x}]",
-            &self.machine, &self.number_of_sections,
-            &self.section_table_offset, &self.image_base, &self.entry_point
-        )
+// impl<'a> FileFormatParser<'a> for Parser<'a, Pe> {
+//     ///
+//     /// Basic zero-copy PE parser: for now there's no need for a complete parsing, so just parse enough to extract enough info to
+//     /// reach the sections so we can use the iterator later on
+//     ///
+//     fn parse(bytes: &'a [u8]) -> GenericResult<Self> {
+//         let dos_header: &[u8] = bytes.as_ref();
+
+//         // check the dos signature
+//         match dos_header.get(0..2) {
+//             Some(IMAGE_DOS_SIGNATURE) => {}
+//             _ => return Err(error::Error::InvalidMagicParsingError),
+//         };
+
+//         // goto the pe header
+//         let pe_offset = {
+//             let e_lfanew = mem::offset_of!(ImageDosHeader, e_lfanew);
+//             let mut dst = [0u8; 4];
+//             dst.clone_from_slice(&bytes[e_lfanew..e_lfanew.checked_add(4).unwrap()]);
+//             u32::from_le_bytes(dst)
+//         } as usize;
+
+//         // check for the pe signature
+//         match dos_header.get(pe_offset..pe_offset.checked_add(4).unwrap()) {
+//             Some(IMAGE_NT_SIGNATURE) => {}
+//             _ => return Err(error::Error::InvalidStructureParsingError),
+//         };
+
+//         // slice to the pe header directly
+//         let pe_header = dos_header.get(pe_offset..).unwrap();
+
+//         // check machine id
+//         let machine = {
+//             let machine = {
+//                 let mut dst = [0u8; 2];
+//                 dst.clone_from_slice(pe_header.get(4..6).unwrap());
+//                 u16::from_le_bytes(dst)
+//             };
+
+//             match machine {
+//                 IMAGE_FILE_MACHINE_I386 => Ok(cpu::CpuType::X86),
+//                 IMAGE_FILE_MACHINE_X86_64 => Ok(cpu::CpuType::X64),
+//                 IMAGE_FILE_MACHINE_ARM64 => Ok(cpu::CpuType::ARM64),
+//                 IMAGE_FILE_MACHINE_ARMNT => Ok(cpu::CpuType::ARM),
+//                 _ => Err(error::Error::UnsupportedCpuError),
+//             }
+//         }?;
+
+//         //
+//         // get the optional header info we need
+//         // - number of sections
+//         // - size
+//         // - characteristics
+//         // - the offset to the section table
+//         //
+//         let number_of_sections = {
+//             let number_of_sections = mem::offset_of!(ImageFileHeader, number_of_sections);
+//             let mut dst = [0u8; 2];
+//             dst.clone_from_slice(
+//                 pe_header
+//                     .get(number_of_sections..number_of_sections + 2)
+//                     .unwrap(),
+//             );
+//             u16::from_le_bytes(dst)
+//         } as usize;
+
+//         let size_of_optional_header = {
+//             let size_of_optional_header = mem::offset_of!(ImageFileHeader, size_of_optional_header);
+//             let mut dst = [0u8; 2];
+//             dst.clone_from_slice(
+//                 pe_header
+//                     .get(size_of_optional_header..size_of_optional_header + 2)
+//                     .unwrap(),
+//             );
+//             u16::from_le_bytes(dst)
+//         } as usize;
+
+//         // let characteristics = {
+//         //     let characteristics = mem::offset_of!(ImageNtHeader, characteristics);
+//         //     let mut dst = [0u8; 2];
+//         //     dst.clone_from_slice(
+//         //         pe_header
+//         //             .get(
+//         //                 pe_offset.checked_add(characteristics).unwrap()
+//         //                     ..pe_offset.checked_add(characteristics + 2).unwrap(),
+//         //             )
+//         //             .unwrap(),
+//         //     );
+//         //     u16::from_le_bytes(dst)
+//         // } as u16;
+
+//         let section_table_offset: usize = pe_offset
+//             .checked_add(IMAGE_NT_HEADER_SIZE)
+//             .and_then(|x| x.checked_add(size_of_optional_header))
+//             .unwrap();
+
+//         let opt_hdrs = pe_header.get(IMAGE_NT_HEADER_SIZE..).unwrap();
+//         let image_base_off = match machine {
+//             cpu::CpuType::X86 | cpu::CpuType::ARM => {
+//                 mem::offset_of!(ImageOptionalHeader32, image_base)
+//             }
+//             cpu::CpuType::X64 | cpu::CpuType::ARM64 => {
+//                 mem::offset_of!(ImageOptionalHeader64, image_base)
+//             }
+//             _ => unreachable!(),
+//         } as usize;
+
+//         let image_base = u32::from_le_bytes(
+//             opt_hdrs[image_base_off..image_base_off + 4]
+//                 .try_into()
+//                 .unwrap(),
+//         ) as u64;
+
+//         let entry_point_off = match machine {
+//             cpu::CpuType::X86 | cpu::CpuType::ARM => {
+//                 mem::offset_of!(ImageOptionalHeader32, address_of_entry_point)
+//             }
+
+//             cpu::CpuType::X64 | cpu::CpuType::ARM64 => {
+//                 mem::offset_of!(ImageOptionalHeader64, address_of_entry_point)
+//             }
+//             _ => unreachable!(),
+//         } as usize;
+
+//         let entry_point = u32::from_le_bytes(
+//             opt_hdrs[entry_point_off..entry_point_off + 4]
+//                 .try_into()
+//                 .unwrap(),
+//         ) as u64;
+
+//         Ok(Parser::<Pe> {
+//             bytes: dos_header,
+//             machine: machine,
+//             number_of_sections: number_of_sections,
+//             image_base: image_base,
+//             entry_point: entry_point,
+//             section_table_offset,
+//         })
+//     }
+
+//     fn sections(&self) -> GenericResult<Vec<Section>> {
+//         // let mut vec = Vec::<section>::new();
+//         // let mut si = ;
+//         // loop {
+//         //     let res = si.next();
+//         //     match res {
+//         //         Some(sec) => vec.push(sec),
+//         //         None => break,
+//         //     }
+//         // }
+//         let vec = PeSectionIterator { index: 0, pe: self }
+//             .into_iter()
+//             .collect();
+//         Ok(vec)
+//     }
+
+//     // TODO tests
+// }
+
+// pub struct PeSectionIterator<'a> {
+//     index: usize,
+//     pe: &'a Pe<'a>,
+// }
+
+type PeSectionIterator<'a> = SectionIterator<'a, Pe>;
+
+pub type PeCharacteristics = u32;
+
+impl<'a> Iterator for PeSectionIterator<'a> {
+    type Item = Section;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let dos_header = &self.obj.bytes;
+        let section_size: usize = mem::size_of::<ImageSectionHeader>();
+
+        if self.index >= self.obj.number_of_sections {
+            return None;
+        }
+
+        let section_index = self.index;
+        self.index += 1;
+
+        let section_offset = self
+            .obj
+            .section_table_offset
+            .checked_add(section_index * section_size)?;
+
+        let name =
+            String::from_utf8(dos_header[section_offset..section_offset + 0x08].to_vec()).unwrap();
+        let virtual_size = u32::from_le_bytes(
+            dos_header[section_offset + 0x08..section_offset + 0x0c]
+                .try_into()
+                .unwrap(),
+        ) as u64;
+        let virtual_address = u32::from_le_bytes(
+            dos_header[section_offset + 0x0c..section_offset + 0x10]
+                .try_into()
+                .unwrap(),
+        ) as u64;
+        let raw_size = u32::from_le_bytes(
+            dos_header[section_offset + 0x10..section_offset + 0x14]
+                .try_into()
+                .unwrap(),
+        ) as usize;
+        let raw_offset = u32::from_le_bytes(
+            dos_header[section_offset + 0x14..section_offset + 0x18]
+                .try_into()
+                .unwrap(),
+        ) as usize;
+        let characteristics = u32::from_le_bytes(
+            dos_header[section_offset + 0x24..section_offset + 0x28]
+                .try_into()
+                .unwrap(),
+        ) as PeCharacteristics;
+
+        Some(Section {
+            start_address: self.obj.image_base.checked_add(virtual_address)?,
+            end_address: self.obj.image_base.checked_add(virtual_address)? + virtual_size,
+            name: Some(name),
+            permission: Permission::from(characteristics),
+            data: dos_header[raw_offset..raw_offset + raw_size].into(),
+        })
     }
 }
 
-impl<'a> PeParser<'a> {
-    ///
-    /// Basic PE parser: for now there's no need for a complete parsing, so just parse enough to extract enough info to
-    /// reach the sections so we can use the iterator later on
-    ///
-    pub fn parse(bytes: &'a [u8]) -> GenericResult<Self> {
+// impl<'a> IntoIterator for Parser<'a> {
+//     type Item = Section;
+//     type IntoIter = std::vec::IntoIter<Self::Item>;
+
+//     fn into_iter(self) -> Self::IntoIter {
+//         let dos_header = self.bytes;
+//         let section_size: usize = mem::size_of::<ImageSectionHeader>();
+
+//         for section_index in 0..self.number_of_sections {
+//             println!("parsing {}", section_index);
+
+//             let section_offset = self
+//                 .section_table_offset
+//                 .checked_add(section_index * section_size)
+//                 .unwrap();
+
+//             let name =
+//                 String::from_utf8(dos_header[section_offset..section_offset + 0x08].to_vec())
+//                     .unwrap();
+//             let virtual_size = u32::from_le_bytes(
+//                 dos_header[section_offset + 0x08..section_offset + 0x0c]
+//                     .try_into()
+//                     .unwrap(),
+//             ) as u64;
+//             let virtual_address = u32::from_le_bytes(
+//                 dos_header[section_offset + 0x0c..section_offset + 0x10]
+//                     .try_into()
+//                     .unwrap(),
+//             ) as u64;
+//             let raw_size = u32::from_le_bytes(
+//                 dos_header[section_offset + 0x10..section_offset + 0x14]
+//                     .try_into()
+//                     .unwrap(),
+//             ) as usize;
+//             let raw_offset = u32::from_le_bytes(
+//                 dos_header[section_offset + 0x14..section_offset + 0x18]
+//                     .try_into()
+//                     .unwrap(),
+//             ) as usize;
+//             let characteristics = u32::from_le_bytes(
+//                 dos_header[section_offset + 0x24..section_offset + 0x28]
+//                     .try_into()
+//                     .unwrap(),
+//             ) as PeCharacteristics;
+
+//             return Some(Section {
+//                 start_address: self.image_base.checked_add(virtual_address)?,
+//                 end_address: self.image_base.checked_add(virtual_address)? + virtual_size,
+//                 name: Some(name),
+//                 permission: Permission::from(characteristics),
+//                 data: dos_header[raw_offset..raw_offset + raw_size].into(),
+//             });
+//         }
+
+//         None
+//     }
+// }
+
+impl Pe {
+    // pub fn new(path: PathBuf, obj: goblin::pe::PE<'_>) -> Self {
+    // pub fn new(path: PathBuf) -> GenericResult<Self> {
+    // let mut executable_sections: Vec<Section> = Vec::new();
+    // let mut file = File::open(&path)?;
+    // let mut buf = Vec::<u8>::new();
+    // file.read_to_end(&mut buf)?;
+
+    pub fn new(bytes: Vec<u8>) -> GenericResult<Self> {
+        // let pe = Parser::<Pe>::parse(buf)?;
+        // // let mut reader = BufReader::new(file);
+        // let entry_point = pe.entry_point;
+        // let machine = pe.machine;
+
+        // debug!("{:?}", &pe);
+
+        // let executable_sections = pe
+        //     .filter(|s| s.permission.contains(Permission::EXECUTABLE))
+        //     .collect();
+
+        // let section_iter = SectionIterator { index: 0, pe: &pe };
+
+        // let executable_sections = pe
+        //     .sections()?
+        //     .into_iter()
+        //     .filter(|s| s.is_executable())
+        //     .collect();
+
+        // debug!("{:?}", &executable_sections);
+
+        // for current_section in &obj.sections {
+        // for section in pe {
+        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE == 0 {
+        //     //     continue;
+        //     // }
+
+        //     // let section_name = match std::str::from_utf8(&s.name) {
+        //     //     Ok(v) => String::from(v).replace("\0", ""),
+        //     //     Err(_) => String::new(),
+        //     // };
+
+        //     // let mut section = Section::new(
+        //     //     s.virtual_address as u64,
+        //     //     (s.virtual_address + s.virtual_size - 1) as u64,
+        //     // );
+
+        //     // section.name = Some(section_name);
+
+        //     // let mut perm = Permission::EXECUTABLE;
+        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
+        //     //     perm |= Permission::READABLE;
+        //     // }
+
+        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
+        //     //     perm |= Permission::WRITABLE;
+        //     // }
+
+        //     // section.permission = perm;
+
+        //     // let data = s.data();
+
+        //     // let mut section = Section::from(current_section);
+
+        //     if !section.permission.contains(Permission::EXECUTABLE) {
+        //         continue;
+        //     }
+
+        //     // reader.seek(SeekFrom::Start(current_section.pointer_to_raw_data as u64))?;
+
+        //     // reader.read_exact(&mut section.data).unwrap();
+
+        //     debug!("Adding {}", section);
+        //     executable_sections.push(section);
+        // }
+
         let dos_header: &[u8] = bytes.as_ref();
 
         // check the dos signature
@@ -237,6 +584,11 @@ impl<'a> PeParser<'a> {
                 _ => Err(error::Error::UnsupportedCpuError),
             }
         }?;
+
+        let is_64b = match machine {
+            cpu::CpuType::X86 | cpu::CpuType::ARM => false,
+            _ => true,
+        };
 
         //
         // get the optional header info we need
@@ -303,15 +655,10 @@ impl<'a> PeParser<'a> {
                 .unwrap(),
         ) as u64;
 
-        let entry_point_off = match machine {
-            cpu::CpuType::X86 | cpu::CpuType::ARM => {
-                mem::offset_of!(ImageOptionalHeader32, address_of_entry_point)
-            }
+        let entry_point_off = match is_64b {
+            false => mem::offset_of!(ImageOptionalHeader32, address_of_entry_point),
 
-            cpu::CpuType::X64 | cpu::CpuType::ARM64 => {
-                mem::offset_of!(ImageOptionalHeader64, address_of_entry_point)
-            }
-            _ => unreachable!(),
+            true => mem::offset_of!(ImageOptionalHeader64, address_of_entry_point),
         } as usize;
 
         let entry_point = u32::from_le_bytes(
@@ -320,237 +667,33 @@ impl<'a> PeParser<'a> {
                 .unwrap(),
         ) as u64;
 
-        Ok(PeParser {
-            bytes: dos_header,
-            machine: machine,
-            number_of_sections: number_of_sections,
-            image_base: image_base,
-            entry_point: entry_point,
-            section_table_offset,
-        })
-    }
-
-    pub fn sections(&self) -> GenericResult<Vec<Section>> {
-        let mut vec = Vec::<Section>::new();
-        let mut si = SectionIterator { index: 0, pe: self };
-        loop {
-            let res = si.next();
-            match res {
-                Some(sec) => vec.push(sec),
-                None => break,
-            }
-        }
-        Ok(vec)
-    }
-
-    // TODO tests
-}
-
-pub struct SectionIterator<'a> {
-    index: usize,
-    pe: &'a PeParser<'a>,
-}
-
-pub type PeCharacteristics = u32;
-
-impl<'a> Iterator for SectionIterator<'a> {
-    type Item = Section;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let dos_header = self.pe.bytes;
-        let section_size: usize = mem::size_of::<ImageSectionHeader>();
-
-        if self.index >= self.pe.number_of_sections {
-            return None;
-        }
-
-        let section_index = self.index;
-        self.index += 1;
-
-        let section_offset = self
-            .pe
-            .section_table_offset
-            .checked_add(section_index * section_size)?;
-
-        let name =
-            String::from_utf8(dos_header[section_offset..section_offset + 0x08].to_vec()).unwrap();
-        let virtual_size = u32::from_le_bytes(
-            dos_header[section_offset + 0x08..section_offset + 0x0c]
-                .try_into()
-                .unwrap(),
-        ) as u64;
-        let virtual_address = u32::from_le_bytes(
-            dos_header[section_offset + 0x0c..section_offset + 0x10]
-                .try_into()
-                .unwrap(),
-        ) as u64;
-        let raw_size = u32::from_le_bytes(
-            dos_header[section_offset + 0x10..section_offset + 0x14]
-                .try_into()
-                .unwrap(),
-        ) as usize;
-        let raw_offset = u32::from_le_bytes(
-            dos_header[section_offset + 0x14..section_offset + 0x18]
-                .try_into()
-                .unwrap(),
-        ) as usize;
-        let characteristics = u32::from_le_bytes(
-            dos_header[section_offset + 0x24..section_offset + 0x28]
-                .try_into()
-                .unwrap(),
-        ) as PeCharacteristics;
-
-        Some(Section {
-            start_address: self.pe.image_base.checked_add(virtual_address)?,
-            end_address: self.pe.image_base.checked_add(virtual_address)? + virtual_size,
-            name: Some(name),
-            permission: Permission::from(characteristics),
-            data: dos_header[raw_offset..raw_offset + raw_size].into(),
-        })
-    }
-}
-
-// impl<'a> IntoIterator for PeParser<'a> {
-//     type Item = Section;
-//     type IntoIter = std::vec::IntoIter<Self::Item>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let dos_header = self.bytes;
-//         let section_size: usize = mem::size_of::<ImageSectionHeader>();
-
-//         for section_index in 0..self.number_of_sections {
-//             println!("parsing {}", section_index);
-
-//             let section_offset = self
-//                 .section_table_offset
-//                 .checked_add(section_index * section_size)
-//                 .unwrap();
-
-//             let name =
-//                 String::from_utf8(dos_header[section_offset..section_offset + 0x08].to_vec())
-//                     .unwrap();
-//             let virtual_size = u32::from_le_bytes(
-//                 dos_header[section_offset + 0x08..section_offset + 0x0c]
-//                     .try_into()
-//                     .unwrap(),
-//             ) as u64;
-//             let virtual_address = u32::from_le_bytes(
-//                 dos_header[section_offset + 0x0c..section_offset + 0x10]
-//                     .try_into()
-//                     .unwrap(),
-//             ) as u64;
-//             let raw_size = u32::from_le_bytes(
-//                 dos_header[section_offset + 0x10..section_offset + 0x14]
-//                     .try_into()
-//                     .unwrap(),
-//             ) as usize;
-//             let raw_offset = u32::from_le_bytes(
-//                 dos_header[section_offset + 0x14..section_offset + 0x18]
-//                     .try_into()
-//                     .unwrap(),
-//             ) as usize;
-//             let characteristics = u32::from_le_bytes(
-//                 dos_header[section_offset + 0x24..section_offset + 0x28]
-//                     .try_into()
-//                     .unwrap(),
-//             ) as PeCharacteristics;
-
-//             return Some(Section {
-//                 start_address: self.image_base.checked_add(virtual_address)?,
-//                 end_address: self.image_base.checked_add(virtual_address)? + virtual_size,
-//                 name: Some(name),
-//                 permission: Permission::from(characteristics),
-//                 data: dos_header[raw_offset..raw_offset + raw_size].into(),
-//             });
-//         }
-
-//         None
-//     }
-// }
-
-impl Pe {
-    // pub fn new(path: PathBuf, obj: goblin::pe::PE<'_>) -> Self {
-    // pub fn new(path: PathBuf) -> GenericResult<Self> {
-    // let mut executable_sections: Vec<Section> = Vec::new();
-    // let mut file = File::open(&path)?;
-    // let mut buf = Vec::<u8>::new();
-    // file.read_to_end(&mut buf)?;
-
-    pub fn new(buf: &[u8]) -> GenericResult<Self> {
-        let pe = PeParser::parse(buf)?;
-        // let mut reader = BufReader::new(file);
-        let entry_point = pe.entry_point;
-        let machine = pe.machine;
-
-        debug!("{:?}", &pe);
+        // PeSectionIterator { index: 0, pe: self }
+        //     .into_iter()
+        //     .collect();
 
         // let executable_sections = pe
         //     .filter(|s| s.permission.contains(Permission::EXECUTABLE))
         //     .collect();
-
         // let section_iter = SectionIterator { index: 0, pe: &pe };
-
-        let executable_sections = pe
-            .sections()?
-            .into_iter()
-            .filter(|s| s.is_executable())
-            .collect();
-
-        debug!("{:?}", &executable_sections);
-
-        // for current_section in &obj.sections {
-        // for section in pe {
-        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_EXECUTE == 0 {
-        //     //     continue;
-        //     // }
-
-        //     // let section_name = match std::str::from_utf8(&s.name) {
-        //     //     Ok(v) => String::from(v).replace("\0", ""),
-        //     //     Err(_) => String::new(),
-        //     // };
-
-        //     // let mut section = Section::new(
-        //     //     s.virtual_address as u64,
-        //     //     (s.virtual_address + s.virtual_size - 1) as u64,
-        //     // );
-
-        //     // section.name = Some(section_name);
-
-        //     // let mut perm = Permission::EXECUTABLE;
-        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_READ != 0 {
-        //     //     perm |= Permission::READABLE;
-        //     // }
-
-        //     // if s.characteristics & goblin::pe::section_table::IMAGE_SCN_MEM_WRITE != 0 {
-        //     //     perm |= Permission::WRITABLE;
-        //     // }
-
-        //     // section.permission = perm;
-
-        //     // let data = s.data();
-
-        //     // let mut section = Section::from(current_section);
-
-        //     if !section.permission.contains(Permission::EXECUTABLE) {
-        //         continue;
-        //     }
-
-        //     // reader.seek(SeekFrom::Start(current_section.pointer_to_raw_data as u64))?;
-
-        //     // reader.read_exact(&mut section.data).unwrap();
-
-        //     debug!("Adding {}", section);
-        //     executable_sections.push(section);
-        // }
 
         Ok(Self {
             // path: path.clone(),
-            executable_sections,
+            // executable_sections,
             // cpu,
             cpu_type: machine,
             entry_point: entry_point,
-            ..Default::default()
+            bytes,
+            number_of_sections,
+            section_table_offset,
+            image_base,
+            // ..Default::default()
         })
+    }
+}
+
+impl From<Vec<u8>> for Pe {
+    fn from(bytes: Vec<u8>) -> Self {
+        Pe::new(bytes).expect("Failed to parse bytes")
     }
 }
 
@@ -563,8 +706,18 @@ impl ExecutableFileFormat for Pe {
         FileFormat::Pe
     }
 
-    fn executable_sections(&self) -> &Vec<Section> {
-        &self.executable_sections
+    // type Item = Section;
+    // type Iter = std::slice::Iter<'a, Section>;
+
+    fn executable_sections(&self) -> Vec<Section> {
+        // &self.executable_sections
+
+        PeSectionIterator {
+            index: 0,
+            obj: self,
+        }
+        .into_iter()
+        .collect()
     }
 
     // fn cpu(&self) -> &dyn cpu::Cpu {

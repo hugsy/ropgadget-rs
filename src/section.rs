@@ -1,11 +1,12 @@
 use std::fmt;
 
-use crate::format::pe::{
-    PeCharacteristics, IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
+use crate::format::{
+    elf::{ElfCharacteristics, ELF_SECTION_FLAGS_EXECINSTR, ELF_SECTION_FLAGS_WRITE},
+    pe::{PeCharacteristics, IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE},
 };
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Permission: u8
     {
         const NONE = 0;
@@ -40,7 +41,20 @@ impl From<PeCharacteristics> for Permission {
     }
 }
 
-#[derive(Debug, Default)]
+impl From<ElfCharacteristics> for Permission {
+    fn from(value: ElfCharacteristics) -> Self {
+        let mut perm = Permission::READABLE;
+        if value & ELF_SECTION_FLAGS_EXECINSTR != 0 {
+            perm |= Permission::EXECUTABLE;
+        }
+        if value & ELF_SECTION_FLAGS_WRITE != 0 {
+            perm |= Permission::WRITABLE;
+        }
+        perm
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct Section {
     pub start_address: u64,
     pub end_address: u64,
