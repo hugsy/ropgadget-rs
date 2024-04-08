@@ -657,7 +657,6 @@ impl Pe {
 
         let entry_point_off = match is_64b {
             false => mem::offset_of!(ImageOptionalHeader32, address_of_entry_point),
-
             true => mem::offset_of!(ImageOptionalHeader64, address_of_entry_point),
         } as usize;
 
@@ -667,7 +666,7 @@ impl Pe {
                 .unwrap(),
         ) as u64;
 
-        // PeSectionIterator { index: 0, pe: self }
+        // let executable_sections = PeSectionIterator { index: 0, pe: self }
         //     .into_iter()
         //     .collect();
 
@@ -717,6 +716,7 @@ impl ExecutableFileFormat for Pe {
             obj: self,
         }
         .into_iter()
+        .filter(|s| s.permission.contains(Permission::EXECUTABLE))
         .collect()
     }
 

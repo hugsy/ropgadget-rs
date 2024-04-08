@@ -57,15 +57,14 @@ impl std::fmt::Display for ExecutableDetails {
     }
 }
 
-impl Default for ExecutableDetails {
-    fn default() -> Self {
-        ExecutableDetails {
-            // filepath: PathBuf::new(),
-            ..Default::default() // cpu: Box::<cpu::Cpu::X86>::default(),
-                                 // format: Box::<format::pe::Pe>::default(),
-        }
-    }
-}
+// impl Default for ExecutableDetails {
+//     fn default() -> Self {
+//         ExecutableDetails {
+//             filepath: PathBuf::default(),
+//             format: Box::<format::pe::Pe>::default(),
+//         }
+//     }
+// }
 
 impl ExecutableDetails {
     pub fn new(filepath: PathBuf) -> GenericResult<Self> {
@@ -99,7 +98,7 @@ impl ExecutableDetails {
         // let cpu = Box::new( Cpu::from(format.cpu_type()) );
 
         Ok(Self {
-            filepath: filepath,
+            filepath,
             // cpu,
             format,
         })
@@ -148,7 +147,7 @@ impl log::Log for RpLogger {
     fn flush(&self) {}
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Session {
     //
     // session required information
@@ -172,7 +171,7 @@ pub struct Session {
     pub gadgets: Mutex<Vec<Gadget>>,
     pub unique_only: bool,
     pub use_color: bool,
-    pub gadget_types: Vec<InstructionGroup>,
+    pub gadget_type: InstructionGroup,
     pub profile_type: RopProfileStrategy,
 }
 
@@ -185,7 +184,15 @@ impl Session {
 
         Session {
             info,
-            ..Default::default()
+            nb_thread: Default::default(),
+            output: Default::default(),
+            engine_type: Default::default(),
+            max_gadget_length: Default::default(),
+            gadgets: Default::default(),
+            unique_only: Default::default(),
+            use_color: Default::default(),
+            gadget_type: Default::default(),
+            profile_type: Default::default(),
         }
     }
 
@@ -250,14 +257,14 @@ impl Session {
 
 impl std::fmt::Display for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let gadget_types: Vec<String> = self.gadget_types.iter().map(|x| x.to_string()).collect();
+        // let gadget_types: Vec<String> = self.gadget_type.iter().map(|x| x.to_string()).collect();
         write!(
             f,
             "Session(File='{}', {}, Profile={}, GadgetTypes=[{}])",
-            self.filepath().to_str().unwrap(),
-            self.info,
-            self.profile_type,
-            gadget_types.join(", "),
+            &self.filepath().to_str().unwrap(),
+            &self.info,
+            &self.profile_type,
+            &self.gadget_type,
         )
     }
 }
@@ -378,7 +385,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
     let mut gadgets: Vec<Gadget> = Vec::new();
     let sections = session.info.format.executable_sections();
     if let Some(section) = sections.get(index) {
-        println!(
+        debug!(
             "{:?}: Processing section '{:?}'",
             thread::current().id(),
             &section.name
@@ -398,7 +405,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
 
         for (pos, len) in chunks {
             println!(
-                "{:?}: Processing Section {:?}[..{:x}+{:x}] (size={:x})",
+                "{:?}: Processing Chunk{:?}[..{:x}+{:x}] (size={:x})",
                 thread::current().id(),
                 &section.name,
                 pos,

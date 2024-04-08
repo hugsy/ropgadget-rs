@@ -28,7 +28,7 @@ pub struct Args {
 
     /// The verbosity level
     #[arg(short, long = "verbose", action = clap::ArgAction::Count)]
-    verbosity: u8,
+    verbosity: usize,
 
     /// Unique gadgets
     #[arg(short, long, action = ArgAction::SetTrue)]
@@ -69,13 +69,7 @@ pub struct Args {
 fn main() -> GenericResult<()> {
     let args = Args::parse();
 
-    let verbosity = match args.verbosity {
-        4 => LevelFilter::Trace, // -vvvv
-        3 => LevelFilter::Debug, // -vvv
-        2 => LevelFilter::Info,  // -vv
-        1 => LevelFilter::Warn,  // -v
-        _ => LevelFilter::Error,
-    };
+    let verbosity = LevelFilter::Debug; //from(args.verbosity);
 
     let _output = match args.output_file {
         None => RopGadgetOutput::Console,

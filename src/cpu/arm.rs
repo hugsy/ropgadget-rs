@@ -40,6 +40,10 @@ impl cpu::Cpu for Arm {
     fn insn_step(&self) -> usize {
         4
     }
+
+    fn max_rewind_size(&self) -> usize {
+        16
+    }
 }
 
 // impl std::fmt::Debug for Arm {
@@ -104,6 +108,10 @@ impl cpu::Cpu for Arm64 {
 
     fn insn_step(&self) -> usize {
         4
+    }
+
+    fn max_rewind_size(&self) -> usize {
+        16
     }
 }
 

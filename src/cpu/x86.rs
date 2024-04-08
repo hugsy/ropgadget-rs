@@ -44,6 +44,10 @@ impl cpu::Cpu for X86 {
     fn insn_step(&self) -> usize {
         1
     }
+
+    fn max_rewind_size(&self) -> usize {
+        16
+    }
 }
 
 // impl std::fmt::Debug for X86 {
@@ -101,6 +105,10 @@ impl cpu::Cpu for X64 {
 
     fn insn_step(&self) -> usize {
         1
+    }
+
+    fn max_rewind_size(&self) -> usize {
+        16
     }
 }
 

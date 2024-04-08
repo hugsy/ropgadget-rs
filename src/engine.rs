@@ -13,7 +13,6 @@ use crate::gadget::{Instruction, InstructionGroup};
 #[derive(Debug, Default)]
 pub enum DisassemblyEngineType {
     #[default]
-    Invalid,
     Capstone,
 }
 
@@ -45,7 +44,7 @@ impl DisassemblyEngine {
             DisassemblyEngineType::Capstone => Self {
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
-            DisassemblyEngineType::Invalid => panic!(),
+            _ => panic!("invalid disassembler"),
         }
     }
 }

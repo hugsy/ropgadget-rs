@@ -1,7 +1,7 @@
 extern crate capstone;
 
 // use std::borrow::Borrow;
-use std::{fmt, thread};
+use std::{default, fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
     sync::Arc,
@@ -18,12 +18,13 @@ use crate::session::{RopProfileStrategy, Session};
 
 use clap::ValueEnum;
 
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(std::fmt::Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum InstructionGroup {
     Undefined,
+    #[default]
+    Ret,
     Jump,
     Call,
-    Ret,
     Int,
     Iret,
     Privileged,
@@ -196,7 +197,7 @@ pub fn get_all_valid_positions_and_length(
 ) -> GenericResult<Vec<(usize, usize)>> {
     let data = &section.data[cursor..].to_vec();
 
-    let groups = match session.gadget_types.first().unwrap() {
+    let groups = match &session.gadget_type {
         InstructionGroup::Ret => {
             debug!("inserting ret positions and length...");
             cpu.ret_insns()
@@ -212,7 +213,7 @@ pub fn get_all_valid_positions_and_length(
         InstructionGroup::Int => todo!(),
         InstructionGroup::Iret => todo!(),
         InstructionGroup::Privileged => todo!(),
-        InstructionGroup::Undefined => todo!(),
+        InstructionGroup::Undefined => panic!(),
     };
 
     collect_previous_instructions(session, &groups, data)
@@ -229,14 +230,7 @@ pub fn find_gadgets_from_position(
     initial_len: usize,
     cpu: &Box<dyn cpu::Cpu>,
 ) -> GenericResult<Vec<Gadget>> {
-    let max_invalid_size = match cpu.cpu_type() // todo: use session.max_gadget_length
-    {
-        cpu::CpuType::X86 => { 16 }
-        cpu::CpuType::X64 => { 16 }
-        cpu::CpuType::ARM64 => { 16 }
-        cpu::CpuType::ARM => { 16 }
-        cpu::CpuType::Unknown => panic!(),
-    };
+    let max_invalid_size = cpu.max_rewind_size();
 
     let start_address = section.start_address;
     let s: usize = if initial_position < max_invalid_size {
@@ -291,7 +285,7 @@ pub fn find_gadgets_from_position(
                 nb_invalid = 0;
                 if !x.is_empty() {
                     let last_insn = x.last().unwrap();
-                    if session.gadget_types.contains(&last_insn.group) {
+                    if &session.gadget_type == &last_insn.group {
                         let gadget = Gadget::new(x);
                         if gadgets.iter().all(|x| x.address != gadget.address) {
                             debug!(
