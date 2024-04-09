@@ -28,7 +28,7 @@ pub struct Args {
 
     /// The verbosity level
     #[arg(short, long = "verbose", action = clap::ArgAction::Count)]
-    verbosity: usize,
+    verbosity: u8,
 
     /// Unique gadgets
     #[arg(short, long, action = ArgAction::SetTrue)]
@@ -69,7 +69,13 @@ pub struct Args {
 fn main() -> GenericResult<()> {
     let args = Args::parse();
 
-    let verbosity = LevelFilter::Debug; //from(args.verbosity);
+    let verbosity = match args.verbosity {
+        1 => LevelFilter::Warn,
+        2 => LevelFilter::Info,
+        3 => LevelFilter::Debug,
+        4 => LevelFilter::Trace,
+        _ => LevelFilter::Error,
+    };
 
     let _output = match args.output_file {
         None => RopGadgetOutput::Console,
@@ -80,7 +86,7 @@ fn main() -> GenericResult<()> {
         .nb_thread(args.thread_num.into())
         .output(_output)
         .unique_only(args.unique)
-        // .verbosity(verbosity)
+        .verbosity(verbosity)
         .use_color(!args.no_color);
 
     info!("Created session: {:?}", sess);

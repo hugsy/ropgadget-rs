@@ -74,7 +74,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     //
     // sort by address
     //
-    gadgets.sort_by(|a, b| a.address.cmp(&b.address));
+    gadgets.sort_by_key(|a| a.address());
 
     //
     // Write to given output
@@ -90,10 +90,10 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
             for g in &*gadgets {
                 let addr = match is_64b {
                     true => {
-                        format!("0x{:016x}", g.address)
+                        format!("0x{:016x}", g.address())
                     }
                     _ => {
-                        format!("0x{:08x}", g.address)
+                        format!("0x{:08x}", g.address())
                     }
                 };
 
@@ -118,7 +118,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
 
             let mut file = fs::File::create(&filename)?;
             for gadget in &*gadgets {
-                let addr = entrypoint_address + gadget.address;
+                let addr = entrypoint_address + gadget.address();
                 file.write_all((format!("{:#x} | {}\n", addr, gadget.text(false))).as_bytes())?;
             }
 
@@ -155,6 +155,7 @@ mod tests {
         let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
         let s = Session::new(input_fname)
             .output(RopGadgetOutput::None)
+            .verbosity(log::LevelFilter::Trace)
             .nb_thread(4);
         dbg!(&s);
         match collect_all_gadgets(s) {

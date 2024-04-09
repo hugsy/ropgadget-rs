@@ -79,13 +79,13 @@ impl fmt::Display for Section {
 impl Section {
     pub fn new(start_address: u64, end_address: u64) -> Self {
         assert!(start_address < end_address);
-        let sz = (end_address - start_address) as usize;
+        let _sz = (end_address - start_address) as usize;
         Self {
             start_address,
             end_address,
             name: None,
             permission: Permission::NONE,
-            data: vec![0; sz],
+            data: Vec::default(),
         }
     }
 
@@ -117,56 +117,56 @@ impl Section {
     }
 }
 
-impl From<&goblin::elf::section_header::SectionHeader> for Section {
-    fn from(value: &goblin::elf::section_header::SectionHeader) -> Self {
-        let mut perm = Permission::NONE;
+// impl From<&goblin::elf::section_header::SectionHeader> for Section {
+//     fn from(value: &goblin::elf::section_header::SectionHeader) -> Self {
+//         let mut perm = Permission::NONE;
 
-        if value.is_executable() {
-            perm |= Permission::READABLE | Permission::EXECUTABLE;
-        }
+//         if value.is_executable() {
+//             perm |= Permission::READABLE | Permission::EXECUTABLE;
+//         }
 
-        if value.is_writable() {
-            perm |= Permission::READABLE | Permission::WRITABLE;
-        }
+//         if value.is_writable() {
+//             perm |= Permission::READABLE | Permission::WRITABLE;
+//         }
 
-        let sz = value.sh_size as usize;
+//         let sz = value.sh_size as usize;
 
-        Self {
-            start_address: value.sh_addr,
-            end_address: value.sh_addr + sz as u64,
-            permission: perm,
-            name: None,
-            data: vec![0; sz],
-        }
-    }
-}
+//         Self {
+//             start_address: value.sh_addr,
+//             end_address: value.sh_addr + sz as u64,
+//             permission: perm,
+//             name: None,
+//             data: vec![0; sz],
+//         }
+//     }
+// }
 
-impl From<&goblin::mach::segment::Segment<'_>> for Section {
-    fn from(value: &goblin::mach::segment::Segment) -> Self {
-        let mut perm = Permission::READABLE;
+// impl From<&goblin::mach::segment::Segment<'_>> for Section {
+//     fn from(value: &goblin::mach::segment::Segment) -> Self {
+//         let mut perm = Permission::READABLE;
 
-        if value.flags & goblin::mach::constants::S_ATTR_PURE_INSTRUCTIONS == 0
-            || value.flags & goblin::mach::constants::S_ATTR_SOME_INSTRUCTIONS == 0
-        {
-            perm |= Permission::EXECUTABLE;
-        }
+//         if value.flags & goblin::mach::constants::S_ATTR_PURE_INSTRUCTIONS == 0
+//             || value.flags & goblin::mach::constants::S_ATTR_SOME_INSTRUCTIONS == 0
+//         {
+//             perm |= Permission::EXECUTABLE;
+//         }
 
-        let section_name = match std::str::from_utf8(&value.segname) {
-            Ok(v) => String::from(v).replace('\0', ""),
-            Err(_) => "".to_string(),
-        };
+//         let section_name = match std::str::from_utf8(&value.segname) {
+//             Ok(v) => String::from(v).replace('\0', ""),
+//             Err(_) => "".to_string(),
+//         };
 
-        let sz = value.vmsize as usize;
+//         let sz = value.vmsize as usize;
 
-        Self {
-            start_address: value.vmaddr,
-            end_address: value.vmaddr + sz as u64,
-            name: Some(section_name),
-            permission: perm,
-            data: vec![0; sz],
-        }
-    }
-}
+//         Self {
+//             start_address: value.vmaddr,
+//             end_address: value.vmaddr + sz as u64,
+//             name: Some(section_name),
+//             permission: perm,
+//             data: vec![0; sz],
+//         }
+//     }
+// }
 
 // impl From<&goblin::pe::section_table::SectionTable> for Section {
 //     fn from(value: &goblin::pe::section_table::SectionTable) -> Self {

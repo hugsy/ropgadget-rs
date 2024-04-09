@@ -1,7 +1,6 @@
 extern crate capstone;
 
-// use std::borrow::Borrow;
-use std::{default, fmt, thread};
+use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
     sync::Arc,
@@ -87,10 +86,7 @@ impl fmt::Display for Instruction {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Gadget {
-    pub address: u64,
     pub insns: Vec<Instruction>,
-    pub size: usize,  // sum() of sizeof(each_instruction)
-    pub raw: Vec<u8>, // concat() of instruction.raw
 }
 
 impl fmt::Display for Gadget {
@@ -98,7 +94,7 @@ impl fmt::Display for Gadget {
         write!(
             f,
             "Gadget(addr={:#x}, text='{}')",
-            self.address,
+            self.address(),
             self.text(false)
         )
     }
@@ -106,26 +102,7 @@ impl fmt::Display for Gadget {
 
 impl Gadget {
     pub fn new(insns: Vec<Instruction>) -> Self {
-        //
-        // by nature, we should never be here if insns.len() is 0 (should at least have the
-        // ret insn) so we assert() to be notified
-        //
-        if insns.is_empty() {
-            std::panic::panic_any("GadgetBuildError");
-        }
-
-        let size = insns.iter().map(|x| x.size).sum();
-
-        let raw = insns.iter().flat_map(|x| x.raw.clone()).collect();
-
-        let address = insns.first().unwrap().address;
-
-        Self {
-            size,
-            raw,
-            address,
-            insns,
-        }
+        Self { insns }
     }
 
     pub fn text(&self, use_color: bool) -> String {
@@ -133,6 +110,18 @@ impl Gadget {
             .iter()
             .map(|i| i.text(use_color).clone() + " ; ")
             .collect()
+    }
+
+    pub fn address(&self) -> u64 {
+        self.insns.first().unwrap().address
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        self.insns.iter().flat_map(|x| x.raw.clone()).collect()
+    }
+
+    pub fn size(&self) -> usize {
+        self.insns.iter().map(|x| x.size).sum()
     }
 }
 
@@ -287,12 +276,12 @@ pub fn find_gadgets_from_position(
                     let last_insn = x.last().unwrap();
                     if &session.gadget_type == &last_insn.group {
                         let gadget = Gadget::new(x);
-                        if gadgets.iter().all(|x| x.address != gadget.address) {
+                        if gadgets.iter().all(|x| x.address() != gadget.address()) {
                             debug!(
                                 "{:?}: pushing new gadget(address={:x}, sz={})",
                                 thread::current().id(),
-                                gadget.address,
-                                gadget.raw.len()
+                                &gadget.address(),
+                                &gadget.bytes().len()
                             );
                             gadgets.push(gadget);
                         }

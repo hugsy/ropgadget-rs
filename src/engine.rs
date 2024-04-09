@@ -44,7 +44,6 @@ impl DisassemblyEngine {
             DisassemblyEngineType::Capstone => Self {
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
-            _ => panic!("invalid disassembler"),
         }
     }
 }

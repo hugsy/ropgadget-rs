@@ -1,3 +1,4 @@
+use std::any::Any;
 ///!
 ///! Basic implementation of a PE parser, supports x86/64 to extract quickly the sections
 ///!
@@ -5,11 +6,10 @@ use std::convert::TryInto;
 // use std::fs::File;
 // use std::io::Read;
 // use std::path::PathBuf;
-use std::{default, fmt, mem};
+use std::mem;
 
 // use goblin::mach::segment::SectionIterator;
 // use goblin;
-use log::debug;
 
 use crate::common::GenericResult;
 use crate::cpu::{self, CpuType};
@@ -680,7 +680,7 @@ impl Pe {
             // executable_sections,
             // cpu,
             cpu_type: machine,
-            entry_point: entry_point,
+            entry_point,
             bytes,
             number_of_sections,
             section_table_offset,
@@ -701,8 +701,8 @@ impl ExecutableFileFormat for Pe {
     //     &self.path
     // }
 
-    fn format(&self) -> FileFormat {
-        FileFormat::Pe
+    fn format(&self) -> &str {
+        "PE"
     }
 
     // type Item = Section;
@@ -715,7 +715,6 @@ impl ExecutableFileFormat for Pe {
             index: 0,
             obj: self,
         }
-        .into_iter()
         .filter(|s| s.permission.contains(Permission::EXECUTABLE))
         .collect()
     }

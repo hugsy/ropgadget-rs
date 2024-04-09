@@ -7,10 +7,10 @@ use colored::*;
 use log::{debug, error, info, warn, Level, LevelFilter, Metadata, Record};
 
 use crate::common::GenericResult;
-use crate::cpu;
+
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
 use crate::error::Error;
-use crate::format::{self, ExecutableFileFormat, FileFormat};
+use crate::format::{self, FileFormat};
 use crate::gadget::{
     find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
 };
@@ -76,8 +76,8 @@ impl ExecutableDetails {
 
         let format = match FileFormat::parse(buffer)? {
             // Object::PE(_) => Ok(Box::new(pe::Pe::new(file.to_path_buf())?)),
-            FileFormat::Pe2(pe) => Box::new(pe),
-            // Object::Elf(obj) => Ok(Box::new(elf::Elf::new(file.to_path_buf(), obj))),
+            FileFormat::Pe(pe) => Box::new(pe),
+            // FileFormat::Elf(elf) => Box::new(elf),
             // Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
             // Object::Archive(_) => Err(Error::InvalidFileError),
             // Object::Unknown(_) => Err(Error::InvalidFileError),
@@ -86,22 +86,7 @@ impl ExecutableDetails {
             }
         };
 
-        // let format = guess_file_format(&fpath)?;
-
-        // let cpu: Box<dyn cpu::Cpu> = match format.cpu_type() {
-        //     cpu::CpuType::X86 => Box::new(cpu::x86::X86 {}),
-        //     cpu::CpuType::X64 => Box::new(cpu::x86::X64 {}),
-        //     cpu::CpuType::ARM64 => Box::new(cpu::arm::Arm64 {}),
-        //     cpu::CpuType::ARM => Box::new(cpu::arm::Arm {}),
-        //     _ => panic!("CPU type is invalid"),
-        // };
-        // let cpu = Box::new( Cpu::from(format.cpu_type()) );
-
-        Ok(Self {
-            filepath,
-            // cpu,
-            format,
-        })
+        Ok(Self { filepath, format })
     }
 
     pub fn is_64b(&self) -> bool {
@@ -123,6 +108,7 @@ pub enum RopGadgetOutput {
     File(PathBuf),
 }
 
+#[derive(Debug)]
 struct RpLogger;
 
 impl log::Log for RpLogger {
@@ -132,15 +118,20 @@ impl log::Log for RpLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            let level = match record.level().to_string().as_str() {
-                "ERROR" => "ERROR".red(),
-                "WARN" => "WARN".magenta(),
-                "INFO" => "INFO".green(),
-                "DEBUG" => "DEBUG".cyan(),
-                _ => "TRACE".bold(),
+            let level = match record.level() {
+                Level::Error => "ERROR".bold().red(),
+                Level::Warn => "WARN".bold().yellow(),
+                Level::Info => "INFO".bold().green(),
+                Level::Debug => "DEBUG".bold().cyan(),
+                Level::Trace => "TRACE".bold().magenta(),
             };
 
-            println!("[{}] - {}", level, record.args());
+            println!(
+                "{} - {:?} - {}",
+                level,
+                std::thread::current().id(),
+                record.args()
+            );
         }
     }
 
@@ -152,6 +143,7 @@ pub struct Session {
     //
     // session required information
     //
+    // logger: RpLogger,
     pub info: ExecutableDetails,
     pub nb_thread: u8,
     // pub verbosity: LevelFilter,
@@ -175,11 +167,19 @@ pub struct Session {
     pub profile_type: RopProfileStrategy,
 }
 
+// static RP_LOGGER: RpLogger = RpLogger {};
+
 impl Session {
     pub fn new(filepath: PathBuf) -> Self {
         let info = match ExecutableDetails::new(filepath) {
             Ok(i) => i,
             Err(_) => panic!("Session initialization (ExecutableDetails) failed"),
+        };
+
+        let logger = Box::new(RpLogger {});
+        match log::set_boxed_logger(logger) {
+            Ok(_) => {}
+            Err(e) => println!("set_logger failed: {}", &e.to_string()),
         };
 
         Session {
@@ -218,9 +218,11 @@ impl Session {
         Self { use_color, ..self }
     }
 
-    // pub fn verbosity(self, verbosity: LevelFilter) -> Self {
-    //     Self { verbosity, ..self }
-    // }
+    pub fn verbosity(self, verbosity: LevelFilter) -> Self {
+        log::set_max_level(verbosity);
+        debug!("Verbosity changed to {}", &verbosity);
+        Self { ..self }
+    }
 
     pub fn filepath(&self) -> &PathBuf {
         &self.info.filepath
@@ -277,7 +279,10 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     let number_of_sections = info.format.executable_sections().len();
     let nb_thread = session.nb_thread as usize;
 
-    debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
+    debug!(
+        "Using {} threads over {} section(s) of executable code...",
+        &nb_thread, &number_of_sections
+    );
 
     //
     // Multithread parsing of each section
@@ -372,11 +377,11 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
 ///
 /// Worker routine to search for gadgets
 ///
-fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadget> {
+fn thread_worker(session: Arc<Session>, section_index: usize, cursor: usize) -> Vec<Gadget> {
     let cpu = session.info.format.cpu();
     let engine = DisassemblyEngine::new(&session.engine_type, cpu.as_ref());
     debug!(
-        "{:?}: Initialized engine {} for {:?}",
+        "{:?}: Initialized {} for {:?}",
         thread::current().id(),
         engine,
         cpu.cpu_type()
@@ -384,7 +389,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
 
     let mut gadgets: Vec<Gadget> = Vec::new();
     let sections = session.info.format.executable_sections();
-    if let Some(section) = sections.get(index) {
+    if let Some(section) = sections.get(section_index) {
         debug!(
             "{:?}: Processing section '{:?}'",
             thread::current().id(),
@@ -395,17 +400,24 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
         let disass = engine.disassembler.as_ref();
 
         let chunks = match get_all_valid_positions_and_length(&session, cpu, section, cursor) {
-            Ok(e) => e,
+            Ok(chunks) => chunks,
             Err(e) => {
-                error!("error in `get_all_valid_positions_and_length`: {:?}", e);
-                // TODO use errors
-                return Vec::default();
+                error!("Error in `get_all_valid_positions_and_length`: {:?}", &e);
+                return gadgets;
             }
         };
 
+        if chunks.is_empty() {
+            warn!(
+                "No pattern found in section {:?} at position={}",
+                &section, &cursor
+            );
+            return gadgets;
+        }
+
         for (pos, len) in chunks {
             println!(
-                "{:?}: Processing Chunk{:?}[..{:x}+{:x}] (size={:x})",
+                "{0:?}: Processing Chunk {1:?}[{2:x}..{2:x}+{3:x}] (size={4:x})",
                 thread::current().id(),
                 &section.name,
                 pos,
@@ -416,7 +428,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
             match find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu) {
                 Ok(mut g) => gadgets.append(&mut g),
                 Err(e) => {
-                    println!("error in `find_gadgets_from_position`: {:?}", e);
+                    error!("error in `find_gadgets_from_position`: {:?}", &e);
                     break;
                 }
             }
@@ -431,7 +443,7 @@ fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadg
         warn!(
             "{:?}: No section at index {}, ending...",
             thread::current().id(),
-            index,
+            section_index,
         );
     }
 

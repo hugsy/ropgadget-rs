@@ -1,6 +1,6 @@
 // use colored::Colorize;
 // use goblin;
-use log::debug;
+
 use std::convert::TryInto;
 // use std::fs::File;
 // use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -8,7 +8,7 @@ use std::mem;
 // use std::path::PathBuf;
 
 use crate::common::GenericResult;
-use crate::cpu::{self, CpuType};
+use crate::cpu::{self};
 use crate::error;
 use crate::section::Permission;
 use crate::{format::FileFormat, section::Section};
@@ -91,122 +91,6 @@ struct ElfSectionHeader64 {
     sh_entsize: u64,
 }
 
-// #[derive(Default)]
-// pub struct ElfParser<'a> {
-//     bytes: &'a [u8],
-//     machine: CpuType,
-//     number_of_sections: usize,
-//     section_table_offset: usize,
-//     entry_point: u64,
-// }
-
-// impl<'a> FileFormatParser<'a> for Parser<'a, Elf> {
-//     fn parse(bytes: &'a [u8]) -> GenericResult<Self> {
-//         let elf_header: &[u8] = bytes.as_ref();
-
-//         match elf_header.get(0..ELF_HEADER_MAGIC.len()) {
-//             Some(ELF_HEADER_MAGIC) => {}
-//             _ => return Err(error::Error::InvalidMagicParsingError),
-//         };
-
-//         let is_64b = {
-//             let ei_class_off = mem::offset_of!(ElfIdentHeader, ei_class);
-//             match elf_header.get(ei_class_off) {
-//                 Some(val) => match *val {
-//                     ELF_CLASS_32 => false,
-//                     ELF_CLASS_64 => true,
-//                     _ => {
-//                         return Err(error::Error::InvalidFileError);
-//                     }
-//                 },
-//                 None => {
-//                     return Err(error::Error::InvalidFileError);
-//                 }
-//             }
-//         };
-
-//         let machine = {
-//             let ei_class_off = mem::offset_of!(ElfHeader64, e_machine);
-//             let machine = {
-//                 let mut dst = [0u8; 2];
-//                 dst.clone_from_slice(elf_header.get(ei_class_off..ei_class_off + 2).unwrap());
-//                 u16::from_le_bytes(dst)
-//             };
-
-//             match machine {
-//                 ELF_MACHINE_386 => Ok(cpu::CpuType::X86),
-//                 ELF_MACHINE_AMD64 => Ok(cpu::CpuType::X64),
-//                 ELF_MACHINE_ARM => match is_64b {
-//                     true => Ok(cpu::CpuType::ARM64),
-//                     false => Ok(cpu::CpuType::ARM),
-//                 },
-
-//                 _ => Err(error::Error::UnsupportedCpuError),
-//             }
-//         }?;
-
-//         let entrypoint = {
-//             match is_64b {
-//                 true => {
-//                     let e_entry_off = mem::offset_of!(ElfHeader64, e_entry);
-//                     u64::from_le_bytes(elf_header[e_entry_off..e_entry_off + 8].try_into().unwrap())
-//                 }
-//                 false => {
-//                     let e_entry_off = mem::offset_of!(ElfHeader32, e_entry);
-//                     u32::from_le_bytes(elf_header[e_entry_off..e_entry_off + 4].try_into().unwrap())
-//                         as u64
-//                 }
-//             }
-//         };
-
-//         let number_of_sections = {
-//             let e_shnum_off = match is_64b {
-//                 true => mem::offset_of!(ElfHeader64, e_shnum),
-//                 false => mem::offset_of!(ElfHeader32, e_shnum),
-//             };
-//             u16::from_le_bytes(elf_header[e_shnum_off..e_shnum_off + 2].try_into().unwrap())
-//         } as usize;
-
-//         let section_table_offset = {
-//             match is_64b {
-//                 true => {
-//                     let e_shoff_off = mem::offset_of!(ElfHeader64, e_shoff);
-//                     u64::from_le_bytes(elf_header[e_shoff_off..e_shoff_off + 8].try_into().unwrap())
-//                         as usize
-//                 }
-//                 false => {
-//                     let e_shoff_off = mem::offset_of!(ElfHeader32, e_shoff);
-//                     u32::from_le_bytes(elf_header[e_shoff_off..e_shoff_off + 4].try_into().unwrap())
-//                         as usize
-//                 }
-//             }
-//         };
-
-//         Ok(Parser::<Elf> {
-//             bytes: elf_header,
-//             machine: machine,
-//             number_of_sections: number_of_sections,
-//             entry_point: entrypoint,
-//             section_table_offset: section_table_offset,
-//             image_base: 0,
-//         })
-//     }
-
-//     fn sections(&self) -> GenericResult<Vec<Section>> {
-//         Ok(ElfSectionIterator {
-//             index: 0,
-//             elf: self,
-//         }
-//         .into_iter()
-//         .collect())
-//     }
-// }
-
-// pub struct ElfSectionIterator<'a> {
-//     index: usize,
-//     elf: &'a Parser<'a, Elf>,
-// }
-
 type ElfSectionIterator<'a> = SectionIterator<'a, Elf>;
 
 pub type ElfCharacteristics = u64;
@@ -240,7 +124,7 @@ impl<'a> Iterator for ElfSectionIterator<'a> {
             u64::from_le_bytes(current_section[0x18..0x20].try_into().unwrap()) as usize;
 
         Some(Section {
-            start_address: start_address,
+            start_address,
             end_address: start_address.checked_add(section_size as u64)?,
             name: Some(section_name),
             permission: Permission::from(flags),
@@ -261,81 +145,11 @@ pub struct Elf {
     number_of_sections: usize,
     section_table_offset: usize,
     entry_point: u64,
-    image_base: u64,
+    // image_base: u64,
 }
 
 impl Elf {
     pub fn new(bytes: Vec<u8>) -> GenericResult<Self> {
-        // let filepath = path.to_str().unwrap();
-        // let elf = Parser::<Elf>::parse(buf)?;
-        // let executable_sections = elf
-        //     .sections()?
-        //     .into_iter()
-        //     .filter(|s| s.is_executable())
-        //     .collect();
-        // debug!("{:?}", &executable_sections);
-        // debug!(
-        //     "looking for executable sections in ELF: '{}'",
-        //     filepath.bold()
-        // );
-
-        // let file = File::open(&path).unwrap();
-        // let mut reader = BufReader::new(file);
-
-        // for current_section in &obj.section_headers {
-        // trace!("Testing section {:?}", s);
-
-        // //
-        // // disregard non executable section
-        // //
-        // if !s.is_executable() {
-        //     continue;
-        // }
-
-        // debug!("Importing section {:?}", s);
-
-        // let mut section = Section::from(s);
-        // section.name = Some(String::from(&obj.shdr_strtab[s.sh_name]));
-
-        //     let mut sect =
-        //         Section::from(current_section).name(&obj.shdr_strtab[current_section.sh_name]);
-
-        //     if !sect.permission.contains(Permission::EXECUTABLE) {
-        //         continue;
-        //     }
-
-        //     if reader
-        //         .seek(SeekFrom::Start(current_section.sh_addr))
-        //         .is_err()
-        //     {
-        //         panic!("Invalid offset {}", current_section.sh_addr,)
-        //     }
-
-        //     match reader.read_exact(&mut sect.data) {
-        //         Ok(_) => {}
-        //         Err(e) => panic!(
-        //             "Failed to extract section '{}' (size={:#x}) at offset {:#x}: {:?}",
-        //             &sect.name.clone().unwrap_or_default(),
-        //             &sect.size(),
-        //             sect.start_address,
-        //             e
-        //         ),
-        //     };
-
-        //     debug!("Adding {}", sect);
-        //     executable_sections.push(sect);
-        // }
-
-        // let cpu_type = match obj.header.e_machine {
-        //     goblin::elf::header::EM_386 => cpu::CpuType::X86,
-        //     goblin::elf::header::EM_X86_64 => cpu::CpuType::X64,
-        //     goblin::elf::header::EM_ARM => cpu::CpuType::ARM,
-        //     goblin::elf::header::EM_AARCH64 => cpu::CpuType::ARM64,
-        //     _ => {
-        //         panic!("ELF machine format is unsupported")
-        //     }
-        // };
-
         let elf_header: &[u8] = bytes.as_ref();
 
         match elf_header.get(0..ELF_HEADER_MAGIC.len()) {
@@ -425,7 +239,7 @@ impl Elf {
             cpu_type: machine,
             number_of_sections,
             section_table_offset,
-            image_base: 0,
+            // image_base: 0,
             entry_point: entrypoint,
         })
     }
@@ -442,8 +256,8 @@ impl ExecutableFileFormat for Elf {
     //     &self.path
     // }
 
-    fn format(&self) -> FileFormat {
-        FileFormat::Elf
+    fn format(&self) -> &str {
+        "ELF"
     }
 
     fn executable_sections(&self) -> Vec<Section> {
@@ -451,7 +265,6 @@ impl ExecutableFileFormat for Elf {
             index: 0,
             obj: self,
         }
-        .into_iter()
         .collect()
     }
 

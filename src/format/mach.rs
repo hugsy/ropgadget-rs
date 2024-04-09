@@ -1,16 +1,3 @@
-// use std::fs::File;
-// use std::io::{BufReader, Read, Seek, SeekFrom};
-use std::path::PathBuf;
-
-use colored::Colorize;
-use goblin;
-use log::debug;
-
-use crate::cpu;
-use crate::{format::FileFormat, section::Permission, section::Section};
-
-use super::ExecutableFileFormat;
-
 pub const MACHO_HEADER_MAGIC32: &[u8] = b"\xce\xfa\xed\xfe"; // 0xfeedface
 pub const MACHO_HEADER_MAGIC64: &[u8] = b"\xcf\xfa\xed\xfe"; // 0xfeedfacf
 
