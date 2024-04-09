@@ -74,10 +74,10 @@ impl ExecutableDetails {
 
         let buffer = fs::read(filepath.as_path())?;
 
-        let format = match FileFormat::parse(buffer)? {
+        let format: Box<dyn format::ExecutableFileFormat> = match FileFormat::parse(buffer)? {
             // Object::PE(_) => Ok(Box::new(pe::Pe::new(file.to_path_buf())?)),
             FileFormat::Pe(pe) => Box::new(pe),
-            // FileFormat::Elf(elf) => Box::new(elf),
+            FileFormat::Elf(elf) => Box::new(elf),
             // Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
             // Object::Archive(_) => Err(Error::InvalidFileError),
             // Object::Unknown(_) => Err(Error::InvalidFileError),

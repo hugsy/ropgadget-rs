@@ -91,6 +91,21 @@ struct ElfSectionHeader64 {
     sh_entsize: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct ElfSectionHeader32 {
+    sh_name: u32,
+    sh_type: u32,
+    sh_flags: u32,
+    sh_addr: u32,
+    sh_offset: u32,
+    sh_size: u32,
+    sh_link: u32,
+    sh_info: u32,
+    sh_addralign: u32,
+    sh_entsize: u32,
+}
+
 type ElfSectionIterator<'a> = SectionIterator<'a, Elf>;
 
 pub type ElfCharacteristics = u64;
@@ -100,7 +115,16 @@ impl<'a> Iterator for ElfSectionIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let elf_header = &self.obj.bytes;
-        let section_size: usize = mem::size_of::<ElfSectionHeader64>();
+        let is_64b = match self.obj.cpu_type() {
+            cpu::CpuType::X86 | cpu::CpuType::ARM => false,
+            cpu::CpuType::X64 | cpu::CpuType::ARM64 => true,
+            cpu::CpuType::Unknown => panic!(),
+        };
+
+        let section_size: usize = match is_64b {
+            true => mem::size_of::<ElfSectionHeader64>(),
+            false => mem::size_of::<ElfSectionHeader32>(),
+        };
 
         if self.index >= self.obj.number_of_sections {
             return None;
@@ -113,22 +137,63 @@ impl<'a> Iterator for ElfSectionIterator<'a> {
             elf_header.get(self.obj.section_table_offset.checked_add(index)?..)?;
 
         // TODO 32b
-        let start_address = u64::from_le_bytes(current_section[0x10..0x18].try_into().unwrap());
-        let section_size =
-            u64::from_le_bytes(current_section[0x20..0x28].try_into().unwrap()) as usize;
-        let section_name = String::from_utf8(current_section[0..4].to_vec()).unwrap();
-        let flags = u64::from_le_bytes(current_section[0x8..0x10].try_into().unwrap())
-            as ElfCharacteristics;
 
-        let raw_offset =
-            u64::from_le_bytes(current_section[0x18..0x20].try_into().unwrap()) as usize;
+        // get the start address
+        let start_address = match is_64b {
+            true => {
+                let off = mem::offset_of!(ElfSectionHeader64, sh_addr);
+                u64::from_le_bytes(current_section[off..off + 8].try_into().unwrap())
+            }
+            false => {
+                let off = mem::offset_of!(ElfSectionHeader32, sh_addr);
+                u32::from_le_bytes(current_section[off..off + 4].try_into().unwrap()) as u64
+            }
+        };
+
+        let section_size = match is_64b {
+            true => {
+                let off = mem::offset_of!(ElfSectionHeader64, sh_size);
+                u64::from_le_bytes(current_section[off..off + 8].try_into().unwrap())
+            }
+            false => {
+                let off = mem::offset_of!(ElfSectionHeader32, sh_size);
+                u32::from_le_bytes(current_section[off..off + 4].try_into().unwrap()) as u64
+            }
+        } as usize;
+
+        let section_name = {
+            let off = mem::offset_of!(ElfSectionHeader64, sh_name);
+            String::from_utf8(current_section[off..off + 4].to_vec()).unwrap()
+        };
+
+        let flags = match is_64b {
+            true => {
+                let off = mem::offset_of!(ElfSectionHeader64, sh_flags);
+                u64::from_le_bytes(current_section[off..off + 8].try_into().unwrap())
+            }
+            false => {
+                let off = mem::offset_of!(ElfSectionHeader32, sh_flags);
+                u32::from_le_bytes(current_section[off..off + 4].try_into().unwrap()) as u64
+            }
+        } as ElfCharacteristics;
+
+        let raw_offset = match is_64b {
+            true => {
+                let off = mem::offset_of!(ElfSectionHeader64, sh_offset);
+                u64::from_le_bytes(current_section[off..off + 8].try_into().unwrap())
+            }
+            false => {
+                let off = mem::offset_of!(ElfSectionHeader32, sh_offset);
+                u32::from_le_bytes(current_section[off..off + 4].try_into().unwrap()) as u64
+            }
+        } as usize;
 
         Some(Section {
             start_address,
             end_address: start_address.checked_add(section_size as u64)?,
             name: Some(section_name),
             permission: Permission::from(flags),
-            data: elf_header[raw_offset..raw_offset + section_size].into(),
+            data: elf_header[raw_offset..raw_offset.checked_add(section_size)?].into(),
         })
     }
 }
@@ -231,15 +296,10 @@ impl Elf {
         };
 
         Ok(Self {
-            // path: path.clone(),
-            // sections: executable_sections,
-            // cpu_type: elf.machine,
-            // entry_point: elf.entry_point,
             bytes,
             cpu_type: machine,
             number_of_sections,
             section_table_offset,
-            // image_base: 0,
             entry_point: entrypoint,
         })
     }
