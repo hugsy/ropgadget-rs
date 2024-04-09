@@ -1,16 +1,16 @@
-use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{fs, thread};
 
 use clap::ValueEnum;
 use colored::*;
-use log::{debug, info, warn, Level, LevelFilter, Metadata, Record};
+use log::{debug, error, info, warn, Level, LevelFilter, Metadata, Record};
 
 use crate::common::GenericResult;
-use crate::cpu;
+
 use crate::engine::{DisassemblyEngine, DisassemblyEngineType};
-use crate::format::{self, guess_file_format};
+use crate::error::Error;
+use crate::format::{self, FileFormat};
 use crate::gadget::{
     find_gadgets_from_position, get_all_valid_positions_and_length, Gadget, InstructionGroup,
 };
@@ -33,15 +33,14 @@ impl std::fmt::Display for RopProfileStrategy {
 pub struct ExecutableDetails {
     pub filepath: PathBuf,
     pub format: Box<dyn format::ExecutableFileFormat>,
-    pub cpu: Box<dyn cpu::Cpu>,
+    // pub cpu: Box<dyn cpu::Cpu>,
 }
 
 impl std::fmt::Debug for ExecutableDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExecutableDetails")
             .field("filepath", &self.filepath)
-            .field("format", &self.format.format().to_string())
-            .field("cpu", &self.cpu.cpu_type().to_string())
+            .field("format", &self.format)
             .finish()
     }
 }
@@ -51,57 +50,65 @@ impl std::fmt::Display for ExecutableDetails {
         write!(
             f,
             "Info({}, {}, Entry=0x{:x})",
-            self.cpu.cpu_type(),
-            self.format.format(),
-            self.format.entry_point()
+            &self.format.cpu_type(),
+            &self.format.format(),
+            &self.format.entry_point()
         )
     }
 }
 
-impl Default for ExecutableDetails {
-    fn default() -> Self {
-        ExecutableDetails {
-            filepath: PathBuf::new(),
-            cpu: Box::new(cpu::x86::X86 {}),
-            format: Box::new(format::pe::Pe::default()),
-        }
-    }
-}
+// impl Default for ExecutableDetails {
+//     fn default() -> Self {
+//         ExecutableDetails {
+//             filepath: PathBuf::default(),
+//             format: Box::<format::pe::Pe>::default(),
+//         }
+//     }
+// }
 
 impl ExecutableDetails {
-    pub fn new(filepath: PathBuf) -> Self {
-        let fpath = filepath.clone();
-        let format = guess_file_format(&fpath).unwrap();
+    pub fn new(filepath: PathBuf) -> GenericResult<Self> {
+        // if !filepath.as_path().exists() {
+        //     return Err(Error::InvalidFileError);
+        // }
 
-        let cpu: Box<dyn cpu::Cpu> = match format.cpu_type() {
-            cpu::CpuType::X86 => Box::new(cpu::x86::X86 {}),
-            cpu::CpuType::X64 => Box::new(cpu::x86::X64 {}),
-            cpu::CpuType::ARM64 => Box::new(cpu::arm::Arm64 {}),
-            cpu::CpuType::ARM => Box::new(cpu::arm::Arm {}),
-            _ => panic!("CPU type is invalid"),
+        let buffer = fs::read(filepath.as_path())?;
+
+        let format: Box<dyn format::ExecutableFileFormat> = match FileFormat::parse(buffer)? {
+            // Object::PE(_) => Ok(Box::new(pe::Pe::new(file.to_path_buf())?)),
+            FileFormat::Pe(pe) => Box::new(pe),
+            FileFormat::Elf(elf) => Box::new(elf),
+            // Object::Mach(obj) => Ok(Box::new(mach::Mach::new(file.to_path_buf(), obj))),
+            // Object::Archive(_) => Err(Error::InvalidFileError),
+            // Object::Unknown(_) => Err(Error::InvalidFileError),
+            _ => {
+                return Err(Error::InvalidFileError);
+            }
         };
-        // let cpu = Box::new( Cpu::from(format.cpu_type()) );
 
-        ExecutableDetails {
-            filepath: fpath,
-            cpu,
-            format,
-        }
+        Ok(Self { filepath, format })
     }
 
     pub fn is_64b(&self) -> bool {
-        self.cpu.ptrsize() == 8
+        self.format.cpu().ptrsize() == 8
     }
 }
 
 #[derive(Debug, Clone, Default)]
+/// The different types of outputting gadgets
 pub enum RopGadgetOutput {
-    #[default]
+    /// No output, useful for testing & performance
     None,
+
+    #[default]
+    /// Output gadgets to stdout
     Console,
+
+    /// Output gadgets to file
     File(PathBuf),
 }
 
+#[derive(Debug)]
 struct RpLogger;
 
 impl log::Log for RpLogger {
@@ -111,15 +118,20 @@ impl log::Log for RpLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            let level = match record.level().to_string().as_str() {
-                "ERROR" => "ERROR".red(),
-                "WARN" => "WARN".magenta(),
-                "INFO" => "INFO".green(),
-                "DEBUG" => "DEBUG".cyan(),
-                _ => "TRACE".bold(),
+            let level = match record.level() {
+                Level::Error => "ERROR".bold().red(),
+                Level::Warn => "WARN".bold().yellow(),
+                Level::Info => "INFO".bold().green(),
+                Level::Debug => "DEBUG".bold().cyan(),
+                Level::Trace => "TRACE".bold().magenta(),
             };
 
-            println!("[{}] - {}", level, record.args());
+            println!(
+                "{} - {:?} - {}",
+                level,
+                std::thread::current().id(),
+                record.args()
+            );
         }
     }
 
@@ -131,9 +143,10 @@ pub struct Session {
     //
     // session required information
     //
+    // logger: RpLogger,
     pub info: ExecutableDetails,
     pub nb_thread: u8,
-    pub verbosity: LevelFilter,
+    // pub verbosity: LevelFilter,
     pub output: RopGadgetOutput,
 
     //
@@ -150,15 +163,36 @@ pub struct Session {
     pub gadgets: Mutex<Vec<Gadget>>,
     pub unique_only: bool,
     pub use_color: bool,
-    pub gadget_types: Vec<InstructionGroup>,
+    pub gadget_type: InstructionGroup,
     pub profile_type: RopProfileStrategy,
 }
 
+// static RP_LOGGER: RpLogger = RpLogger {};
+
 impl Session {
     pub fn new(filepath: PathBuf) -> Self {
+        let info = match ExecutableDetails::new(filepath) {
+            Ok(i) => i,
+            Err(_) => panic!("Session initialization (ExecutableDetails) failed"),
+        };
+
+        let logger = Box::new(RpLogger {});
+        match log::set_boxed_logger(logger) {
+            Ok(_) => {}
+            Err(e) => println!("set_logger failed: {}", &e.to_string()),
+        };
+
         Session {
-            info: ExecutableDetails::new(filepath),
-            ..Default::default()
+            info,
+            nb_thread: Default::default(),
+            output: Default::default(),
+            engine_type: Default::default(),
+            max_gadget_length: Default::default(),
+            gadgets: Default::default(),
+            unique_only: Default::default(),
+            use_color: Default::default(),
+            gadget_type: Default::default(),
+            profile_type: Default::default(),
         }
     }
 
@@ -185,7 +219,9 @@ impl Session {
     }
 
     pub fn verbosity(self, verbosity: LevelFilter) -> Self {
-        Self { verbosity, ..self }
+        log::set_max_level(verbosity);
+        debug!("Verbosity changed to {}", &verbosity);
+        Self { ..self }
     }
 
     pub fn filepath(&self) -> &PathBuf {
@@ -193,23 +229,23 @@ impl Session {
     }
 }
 
-impl Default for Session {
-    fn default() -> Self {
-        Session {
-            verbosity: LevelFilter::Off,
-            nb_thread: 4,
-            output: RopGadgetOutput::None,
-            unique_only: true,
-            use_color: true,
-            max_gadget_length: 6,
-            gadget_types: vec![InstructionGroup::Ret],
-            profile_type: RopProfileStrategy::Fast,
-            gadgets: Mutex::new(Vec::new()),
-            engine_type: DisassemblyEngineType::Capstone,
-            info: ExecutableDetails::default(),
-        }
-    }
-}
+// impl<'a> Default for Session<'a> {
+//     fn default() -> Self {
+//         Session {
+//             verbosity: LevelFilter::Off,
+//             nb_thread: 4,
+//             output: RopGadgetOutput::None,
+//             unique_only: true,
+//             use_color: true,
+//             max_gadget_length: 6,
+//             gadget_types: vec![InstructionGroup::Ret],
+//             profile_type: RopProfileStrategy::Fast,
+//             gadgets: Mutex::new(Vec::new()),
+//             // engine_type: DisassemblyEngineType::Capstone,
+//             // info: ExecutableDetails::default(),
+//         }
+//     }
+// }
 
 // impl std::fmt::Debug for Session {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -223,14 +259,14 @@ impl Default for Session {
 
 impl std::fmt::Display for Session {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let gadget_types: Vec<String> = self.gadget_types.iter().map(|x| x.to_string()).collect();
+        // let gadget_types: Vec<String> = self.gadget_type.iter().map(|x| x.to_string()).collect();
         write!(
             f,
             "Session(File='{}', {}, Profile={}, GadgetTypes=[{}])",
-            self.filepath().to_str().unwrap(),
-            self.info,
-            self.profile_type,
-            gadget_types.join(", "),
+            &self.filepath().to_str().unwrap(),
+            &self.info,
+            &self.profile_type,
+            &self.gadget_type,
         )
     }
 }
@@ -240,20 +276,31 @@ impl std::fmt::Display for Session {
 ///
 pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
     let info = &session.info;
-    let number_of_sections = info.format.sections().len();
+    let number_of_sections = info.format.executable_sections().len();
     let nb_thread = session.nb_thread as usize;
 
-    debug!("Using {nb_thread} threads over {number_of_sections} section(s) of executable code...");
+    debug!(
+        "Using {} threads over {} section(s) of executable code...",
+        &nb_thread, &number_of_sections
+    );
 
     //
     // Multithread parsing of each section
     //
-    for section_idx in 0..number_of_sections {
-        if info.format.sections().get(section_idx).is_none() {
-            continue;
-        }
+    let sections = info.format.executable_sections();
 
-        let section = info.format.sections().get(section_idx).unwrap();
+    for section_idx in 0..number_of_sections {
+        // if info.format.executable_sections().get(section_idx).is_none() {
+        //     continue;
+        // }
+
+        let section = match sections.get(section_idx) {
+            Some(s) => s,
+            _ => {
+                error!("failed to get section");
+                return Err(crate::error::Error::InvalidFileError);
+            }
+        };
         let chunk_size = section.data.len() / nb_thread;
 
         //
@@ -271,10 +318,19 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
             if thread_pool_size == nb_thread || force_flush {
                 for curthread in threads {
                     debug!("Joining {:?}...", curthread.thread().id());
-                    let gadgets = curthread.join().unwrap();
-                    {
-                        let mut data = session.gadgets.lock().unwrap();
-                        data.extend(gadgets);
+                    match curthread.join() {
+                        Ok(result) => match session.gadgets.lock() {
+                            Ok(mut data) => data.extend(result),
+                            Err(e) => {
+                                error!("Error on unlocking result vector: {:?}", e);
+                                break;
+                            }
+                        },
+
+                        Err(e) => {
+                            error!("Error on thread join: {:?}", e);
+                            break;
+                        }
                     }
                 }
 
@@ -297,13 +353,13 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
             //
             // If so, spawn more workers
             //
-            let rc_session = Arc::clone(&session);
+            let rc_session = session.clone();
             let thread = thread::spawn(move || thread_worker(rc_session, section_idx, pos));
             debug!(
                 "Spawning {:?} (pos={} section_index={})...",
-                thread.thread().id(),
-                pos,
-                section_idx
+                &thread.thread().id(),
+                &pos,
+                &section_idx
             );
             threads.push(thread);
             thread_pool_size += 1;
@@ -313,7 +369,7 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
 
     info!(
         "Total gadgets found => {}",
-        session.gadgets.lock().unwrap().len()
+        &session.gadgets.lock().unwrap().len()
     );
     Ok(())
 }
@@ -321,63 +377,73 @@ pub fn find_gadgets(session: Arc<Session>) -> GenericResult<()> {
 ///
 /// Worker routine to search for gadgets
 ///
-fn thread_worker(session: Arc<Session>, index: usize, cursor: usize) -> Vec<Gadget> {
-    let cpu = session.info.cpu.as_ref();
-    let engine = DisassemblyEngine::new(&session.engine_type, cpu);
+fn thread_worker(session: Arc<Session>, section_index: usize, cursor: usize) -> Vec<Gadget> {
+    let cpu = session.info.format.cpu();
+    let engine = DisassemblyEngine::new(&session.engine_type, cpu.as_ref());
     debug!(
-        "{:?}: Initialized engine {} for {:?}",
+        "{:?}: Initialized {} for {:?}",
         thread::current().id(),
         engine,
         cpu.cpu_type()
     );
 
     let mut gadgets: Vec<Gadget> = Vec::new();
-    let sections = session.info.format.sections();
-    if let Some(section) = sections.get(index) {
-        let section_name = section
-            .name
-            .as_ref()
-            .unwrap_or(String::from("N/A").borrow())
-            .clone();
-
+    let sections = session.info.format.executable_sections();
+    if let Some(section) = sections.get(section_index) {
         debug!(
-            "{:?}: Processing section '{}'",
+            "{:?}: Processing section '{:?}'",
             thread::current().id(),
-            section_name
+            &section.name
         );
 
-        let cpu = &session.info.cpu;
+        let cpu = &session.info.format.cpu();
         let disass = engine.disassembler.as_ref();
 
-        for (pos, len) in
-            get_all_valid_positions_and_length(&session, cpu, section, cursor).unwrap()
-        {
-            debug!(
-                "{:?}: Processing Section {}[..{:x}+{:x}] (size={:x})",
+        let chunks = match get_all_valid_positions_and_length(&session, cpu, section, cursor) {
+            Ok(chunks) => chunks,
+            Err(e) => {
+                error!("Error in `get_all_valid_positions_and_length`: {:?}", &e);
+                return gadgets;
+            }
+        };
+
+        if chunks.is_empty() {
+            warn!(
+                "No pattern found in section {:?} at position={}",
+                &section, &cursor
+            );
+            return gadgets;
+        }
+
+        for (pos, len) in chunks {
+            println!(
+                "{0:?}: Processing Chunk {1:?}[{2:x}..{2:x}+{3:x}] (size={4:x})",
                 thread::current().id(),
-                section_name,
+                &section.name,
                 pos,
                 len,
                 section.size(),
             );
 
-            let res = find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu);
-            if res.is_ok() {
-                let mut gadget = res.unwrap();
-                gadgets.append(&mut gadget);
+            match find_gadgets_from_position(session.clone(), disass, section, pos, len, cpu) {
+                Ok(mut g) => gadgets.append(&mut g),
+                Err(e) => {
+                    error!("error in `find_gadgets_from_position`: {:?}", &e);
+                    break;
+                }
             }
         }
 
         debug!(
-            "{:?}: Finished processing section '{}'",
+            "{:?}: Finished processing section '{:?}'",
             thread::current().id(),
-            section_name,
+            &section.name,
         );
     } else {
         warn!(
             "{:?}: No section at index {}, ending...",
             thread::current().id(),
-            index,
+            section_index,
         );
     }
 

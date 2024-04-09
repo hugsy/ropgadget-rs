@@ -70,10 +70,10 @@ fn main() -> GenericResult<()> {
     let args = Args::parse();
 
     let verbosity = match args.verbosity {
-        4 => LevelFilter::Trace, // -vvvv
-        3 => LevelFilter::Debug, // -vvv
-        2 => LevelFilter::Info,  // -vv
-        1 => LevelFilter::Warn,  // -v
+        1 => LevelFilter::Warn,
+        2 => LevelFilter::Info,
+        3 => LevelFilter::Debug,
+        4 => LevelFilter::Trace,
         _ => LevelFilter::Error,
     };
 

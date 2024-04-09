@@ -13,7 +13,6 @@ use crate::gadget::{Instruction, InstructionGroup};
 #[derive(Debug, Default)]
 pub enum DisassemblyEngineType {
     #[default]
-    Invalid,
     Capstone,
 }
 
@@ -45,7 +44,6 @@ impl DisassemblyEngine {
             DisassemblyEngineType::Capstone => Self {
                 disassembler: Box::new(CapstoneDisassembler::new(cpu)),
             },
-            DisassemblyEngineType::Invalid => panic!(),
         }
     }
 }
@@ -78,7 +76,6 @@ impl Disassembler for CapstoneDisassembler {
     }
 
     fn name(&self) -> String {
-        // todo: add version strings
         let (major, minor) = Capstone::lib_version();
         format!("Capstone-Engine({}.{})", major, minor)
     }
@@ -90,7 +87,7 @@ impl Disassembler for CapstoneDisassembler {
 
 impl std::fmt::Display for CapstoneDisassembler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Disassembler({})", self.name())
+        write!(f, "{}", self.name())
     }
 }
 

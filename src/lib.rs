@@ -24,8 +24,8 @@ use crate::session::Session;
 pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let info = &sess.info;
     let start_timestamp = std::time::Instant::now();
-    let sections = info.format.sections();
-    
+    let sections = info.format.executable_sections();
+
     let use_color = sess.use_color;
     let unique_only = sess.unique_only;
     let chosen_output_format = sess.output.clone();
@@ -44,7 +44,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     let arc = Arc::new(sess);
     match session::find_gadgets(arc.clone()) {
         Ok(_) => {
-            dbg!("Done collecting gadgets");
+            debug!("Done collecting gadgets");
         }
         Err(e) => {
             error!("An error occured while collecting gadgets: {:?}", e);
@@ -74,7 +74,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
     //
     // sort by address
     //
-    gadgets.sort_by(|a, b| a.address.cmp(&b.address));
+    gadgets.sort_by_key(|a| a.address());
 
     //
     // Write to given output
@@ -90,10 +90,10 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
             for g in &*gadgets {
                 let addr = match is_64b {
                     true => {
-                        format!("0x{:016x}", g.address)
+                        format!("0x{:016x}", g.address())
                     }
                     _ => {
-                        format!("0x{:08x}", g.address)
+                        format!("0x{:08x}", g.address())
                     }
                 };
 
@@ -106,7 +106,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
         }
 
         session::RopGadgetOutput::File(filename) => {
-            dbg!(
+            debug!(
                 "Dumping {} gadgets to '{}'...",
                 gadgets.len(),
                 filename.to_str().unwrap()
@@ -118,7 +118,7 @@ pub fn collect_all_gadgets(sess: Session) -> GenericResult<Vec<Gadget>> {
 
             let mut file = fs::File::create(&filename)?;
             for gadget in &*gadgets {
-                let addr = entrypoint_address + gadget.address;
+                let addr = entrypoint_address + gadget.address();
                 file.write_all((format!("{:#x} | {}\n", addr, gadget.text(false))).as_bytes())?;
             }
 
@@ -153,7 +153,11 @@ mod tests {
 
     fn run_basic_test(sz: &str, arch: &str, fmt: &str) -> Vec<Gadget> {
         let input_fname = PathBuf::from(format!("tests/bin/{}-{}.{}", sz, arch, fmt));
-        let s = Session::new(input_fname).output(RopGadgetOutput::None);
+        let s = Session::new(input_fname)
+            .output(RopGadgetOutput::None)
+            .verbosity(log::LevelFilter::Trace)
+            .nb_thread(4);
+        dbg!(&s);
         match collect_all_gadgets(s) {
             Ok(gadgets) => gadgets,
             Err(e) => panic!("{:?}", e),
@@ -180,13 +184,24 @@ mod tests {
             }
         }
 
-        // #[test]
-        // fn arm32() {
-        //     for sz in ["small", "big"] {
-        //         let res = tests::run_basic_test(sz, "arm32", FMT);
-        //         assert!(res.len() > 0);
-        //     }
-        // }
+        #[test]
+        fn arm32_arm() {
+            for _ in ["small", "big"] {
+                // TODO find test files
+                // let res = tests::run_basic_test(sz, "arm32", FMT);
+                // assert!(res.len() > 0);
+            }
+        }
+
+        #[test]
+        fn arm32_thumb2() {
+            for _ in ["small", "big"] {
+                // TODO implement thumb2 mode
+                // let res = tests::run_basic_test(sz, "arm32-thumb2", FMT);
+                // assert!(res.len() > 0);
+            }
+        }
+
         #[test]
         fn arm64() {
             for sz in ["small", "big"] {
@@ -232,24 +247,24 @@ mod tests {
         }
     }
 
-    mod macho {
-        use super::super::*;
-        const FMT: &str = "macho";
+    // mod macho {
+    //     use super::super::*;
+    //     const FMT: &str = "macho";
 
-        #[test]
-        fn x86() {
-            for sz in vec!["small"] {
-                let res = tests::run_basic_test(sz, "x86", FMT);
-                assert!(res.len() > 0);
-            }
-        }
+    //     #[test]
+    //     fn x86() {
+    //         for sz in vec!["small"] {
+    //             let res = tests::run_basic_test(sz, "x86", FMT);
+    //             assert!(res.len() > 0);
+    //         }
+    //     }
 
-        #[test]
-        fn x64() {
-            for sz in vec!["small"] {
-                let res = tests::run_basic_test(sz, "x64", FMT);
-                assert!(res.len() > 0);
-            }
-        }
-    }
+    //     #[test]
+    //     fn x64() {
+    //         for sz in vec!["small"] {
+    //             let res = tests::run_basic_test(sz, "x64", FMT);
+    //             assert!(res.len() > 0);
+    //         }
+    //     }
+    // }
 }

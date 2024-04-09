@@ -1,6 +1,5 @@
 extern crate capstone;
 
-use std::cmp::Ordering;
 use std::{fmt, thread};
 use std::{
     io::{Cursor, Read, Seek, SeekFrom},
@@ -18,12 +17,13 @@ use crate::session::{RopProfileStrategy, Session};
 
 use clap::ValueEnum;
 
-#[derive(std::fmt::Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(std::fmt::Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum InstructionGroup {
     Undefined,
+    #[default]
+    Ret,
     Jump,
     Call,
-    Ret,
     Int,
     Iret,
     Privileged,
@@ -52,9 +52,7 @@ impl Instruction {
             true => {
                 format!("{}", self.mnemonic.cyan())
             }
-            false => {
-                self.mnemonic.to_string()
-            }
+            false => self.mnemonic.to_string(),
         };
 
         let op = match &self.operands {
@@ -88,10 +86,7 @@ impl fmt::Display for Instruction {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Gadget {
-    pub address: u64,
     pub insns: Vec<Instruction>,
-    pub size: usize,  // sum() of sizeof(each_instruction)
-    pub raw: Vec<u8>, // concat() of instruction.raw
 }
 
 impl fmt::Display for Gadget {
@@ -99,7 +94,7 @@ impl fmt::Display for Gadget {
         write!(
             f,
             "Gadget(addr={:#x}, text='{}')",
-            self.address,
+            self.address(),
             self.text(false)
         )
     }
@@ -107,26 +102,7 @@ impl fmt::Display for Gadget {
 
 impl Gadget {
     pub fn new(insns: Vec<Instruction>) -> Self {
-        //
-        // by nature, we should never be here if insns.len() is 0 (should at least have the
-        // ret insn) so we assert() to be notified
-        //
-        if insns.is_empty() {
-            std::panic::panic_any("GadgetBuildError");
-        }
-
-        let size = insns.iter().map(|x| x.size).sum();
-
-        let raw = insns.iter().flat_map(|x| x.raw.clone()).collect();
-
-        let address = insns.first().unwrap().address;
-
-        Self {
-            size,
-            raw,
-            address,
-            insns,
-        }
+        Self { insns }
     }
 
     pub fn text(&self, use_color: bool) -> String {
@@ -135,42 +111,71 @@ impl Gadget {
             .map(|i| i.text(use_color).clone() + " ; ")
             .collect()
     }
+
+    pub fn address(&self) -> u64 {
+        self.insns.first().unwrap().address
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        self.insns.iter().flat_map(|x| x.raw.clone()).collect()
+    }
+
+    pub fn size(&self) -> usize {
+        self.insns.iter().map(|x| x.size).sum()
+    }
 }
 
+//
+// Search for a given group of opcodes in the memory chunks.
+// It effectively split the memory chunk into a vector a [position; length]
+// matching the opcode pattern (i.e. bytes & mask)
+//
 fn collect_previous_instructions(
     session: &Arc<Session>,
     group: &Vec<(Vec<u8>, Vec<u8>)>,
     memory_chunk: &Vec<u8>,
 ) -> GenericResult<Vec<(usize, usize)>> {
-    let mut res: Vec<(usize, usize)> = Vec::new();
+    let mut out = Vec::<(usize, usize)>::new();
 
-    for (opcodes, mask) in group {
-        let sz = opcodes.len();
-
-        let mut v: Vec<(usize, usize)> = memory_chunk
-            .windows(sz)
+    for (bytes, mask) in group {
+        //
+        // For each possible opcode:
+        // - inspect the memory memory chunk
+        // - split into chunks of a length of the opcode, and enumerate
+        // them to add an index
+        // - map each byte of the "sub-chunk" and AND-it with the mask from the
+        // pattern group, and finally compare the result to the bytes from the
+        // pattern
+        // - filter the matches, and collect them into a result vector
+        //
+        let bytes_length = bytes.len();
+        let chunks: Vec<(usize, usize)> = memory_chunk
+            .windows(bytes_length)
             .enumerate()
-            .filter(|(_, y)| {
-                y.iter()
+            .filter(|(_, chunk)| {
+                chunk
+                    .iter()
                     .enumerate()
-                    .map(|(i, z)| z & mask[i])
-                    .cmp(opcodes.to_owned())
-                    == Ordering::Equal
+                    .map(|(i, byte)| byte & mask[i])
+                    .cmp(bytes.to_owned())
+                    .is_eq()
             })
-            .map(|(x, _)| (x, sz))
+            .map(|(pos, _)| (pos, bytes_length))
             .collect();
 
-        res.append(&mut v);
+        if chunks.len() > 0 {
+            out.extend(chunks);
 
-        match session.profile_type {
-            RopProfileStrategy::Fast => {
-                break;
+            match session.profile_type {
+                RopProfileStrategy::Fast => {
+                    break;
+                }
+                RopProfileStrategy::Complete => {}
             }
-            _ => {}
         }
     }
 
-    Ok(res)
+    Ok(out)
 }
 
 pub fn get_all_valid_positions_and_length(
@@ -181,28 +186,24 @@ pub fn get_all_valid_positions_and_length(
 ) -> GenericResult<Vec<(usize, usize)>> {
     let data = &section.data[cursor..].to_vec();
 
-    let mut groups = Vec::new();
-
-    for gadget_type in &session.gadget_types {
-        match gadget_type {
-            InstructionGroup::Ret => {
-                debug!("inserting ret positions and length...");
-                groups.append(&mut cpu.ret_insns().clone());
-            }
-            InstructionGroup::Call => {
-                debug!("inserting call positions and length...");
-                groups.append(&mut cpu.call_insns().clone());
-            }
-            InstructionGroup::Jump => {
-                debug!("inserting jump positions and length...");
-                groups.append(&mut cpu.jmp_insns().clone());
-            }
-            InstructionGroup::Int => todo!(),
-            InstructionGroup::Iret => todo!(),
-            InstructionGroup::Privileged => todo!(),
-            InstructionGroup::Undefined => todo!(),
+    let groups = match &session.gadget_type {
+        InstructionGroup::Ret => {
+            debug!("inserting ret positions and length...");
+            cpu.ret_insns()
         }
-    }
+        InstructionGroup::Call => {
+            debug!("inserting call positions and length...");
+            cpu.call_insns()
+        }
+        InstructionGroup::Jump => {
+            debug!("inserting jump positions and length...");
+            cpu.jmp_insns()
+        }
+        InstructionGroup::Int => todo!(),
+        InstructionGroup::Iret => todo!(),
+        InstructionGroup::Privileged => todo!(),
+        InstructionGroup::Undefined => panic!(),
+    };
 
     collect_previous_instructions(session, &groups, data)
 }
@@ -218,14 +219,7 @@ pub fn find_gadgets_from_position(
     initial_len: usize,
     cpu: &Box<dyn cpu::Cpu>,
 ) -> GenericResult<Vec<Gadget>> {
-    let max_invalid_size = match cpu.cpu_type() // todo: use session.max_gadget_length
-    {
-        cpu::CpuType::X86 => { 16 }
-        cpu::CpuType::X64 => { 16 }
-        cpu::CpuType::ARM64 => { 16 }
-        cpu::CpuType::ARM => { 16 }
-        cpu::CpuType::Unknown => panic!(),
-    };
+    let max_invalid_size = cpu.max_rewind_size();
 
     let start_address = section.start_address;
     let s: usize = if initial_position < max_invalid_size {
@@ -280,14 +274,14 @@ pub fn find_gadgets_from_position(
                 nb_invalid = 0;
                 if !x.is_empty() {
                     let last_insn = x.last().unwrap();
-                    if session.gadget_types.contains(&last_insn.group) {
+                    if &session.gadget_type == &last_insn.group {
                         let gadget = Gadget::new(x);
-                        if gadgets.iter().all(|x| x.address != gadget.address) {
+                        if gadgets.iter().all(|x| x.address() != gadget.address()) {
                             debug!(
                                 "{:?}: pushing new gadget(address={:x}, sz={})",
                                 thread::current().id(),
-                                gadget.address,
-                                gadget.raw.len()
+                                &gadget.address(),
+                                &gadget.bytes().len()
                             );
                             gadgets.push(gadget);
                         }

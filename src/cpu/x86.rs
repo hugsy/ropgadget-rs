@@ -44,13 +44,17 @@ impl cpu::Cpu for X86 {
     fn insn_step(&self) -> usize {
         1
     }
-}
 
-impl std::fmt::Debug for X86 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("X86").finish()
+    fn max_rewind_size(&self) -> usize {
+        16
     }
 }
+
+// impl std::fmt::Debug for X86 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("X86").finish()
+//     }
+// }
 
 pub struct X64;
 
@@ -102,10 +106,14 @@ impl cpu::Cpu for X64 {
     fn insn_step(&self) -> usize {
         1
     }
-}
 
-impl std::fmt::Debug for X64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("X64").finish()
+    fn max_rewind_size(&self) -> usize {
+        16
     }
 }
+
+// impl std::fmt::Debug for X64 {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("X64").finish()
+//     }
+// }
